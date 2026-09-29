@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/* Warm bakery palette: cream page, terracotta brand, deep-brown sidebar. */
+:root {
+  --background: #faf6ef;
+  --surface: #ffffff;
+  --foreground: #2b1d14;
+  --ink: #2b1d14;
+  --muted: #7c6a5c;
+  --line: #eadfce;
+  --brand: #c2571a;
+  --brand-dark: #9f4514;
+  --brand-soft: #fdf0e3;
+  --accent: #f5b942;
+  --sidebar: #3a2416;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-soft: var(--brand-soft);
+  --color-accent: var(--accent);
+  --color-sidebar: var(--sidebar);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Receipts print on their own, without the sidebar. */
+@media print {
+  body {
+    background: white;
+  }
+}
