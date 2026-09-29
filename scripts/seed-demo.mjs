@@ -35,12 +35,22 @@ for (const name of categories) {
   await db.execute({ sql: "INSERT OR IGNORE INTO categories (name) VALUES (?)", args: [name] });
 }
 
-for (const [sku, name, category, srp, cost, stock, reorder] of products) {
+// Barcodes are made-up and unique per product (real ones come from scanning).
+// Clearing them first lets a re-run replace older demo barcodes without
+// tripping the UNIQUE constraint.
+await db.execute({
+  sql: `UPDATE products SET barcode = NULL WHERE sku IN (${products.map(() => "?").join(",")})`,
+  args: products.map((p) => p[0]),
+});
+
+for (const [index, [sku, name, category, srp, cost, stock, reorder]] of products.entries()) {
+  const barcode = `4800000${String(index + 1).padStart(6, "0")}`;
   await db.execute({
-    sql: `INSERT OR IGNORE INTO products
+    sql: `INSERT INTO products
             (sku, barcode, name, category_id, srp, cost, stock_qty, reorder_level)
-          VALUES (?, ?, ?, (SELECT id FROM categories WHERE name = ?), ?, ?, ?, ?)`,
-    args: [sku, "4800000" + sku.replace(/\D/g, "").padStart(6, "0"), name, category, srp, cost, stock, reorder],
+          VALUES (?, ?, ?, (SELECT id FROM categories WHERE name = ?), ?, ?, ?, ?)
+          ON CONFLICT(sku) DO UPDATE SET barcode = excluded.barcode`,
+    args: [sku, barcode, name, category, srp, cost, stock, reorder],
   });
 }
 
