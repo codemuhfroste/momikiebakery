@@ -2,10 +2,9 @@ import { loginAction } from "@/app/actions";
 import { isRelaxedLogin, type LoginRole } from "@/lib/auth";
 import SubmitButton from "./SubmitButton";
 
-// Background video for the brand panel. Leave null until the footage is
-// ready, then drop the file in public/ and set e.g. "/loginbg.mp4"; until
-// then the panel shows its plain green background.
-const LOGIN_VIDEO_SRC: string | null = null;
+// Background video for the brand panel (public/vidbg.mp4). Set to null to
+// show the plain green background instead.
+const LOGIN_VIDEO_SRC: string | null = "/vidbg.mp4";
 
 const ERRORS: Record<string, string> = {
   "1": "That PIN isn't right. Please try again.",
@@ -25,8 +24,8 @@ const COPY: Record<LoginRole, { heading: string; subheading: string; button: str
   },
 };
 
-// Same layout as Gemellus Cashflow: a brand panel (video, or green until the
-// video is provided) beside the PIN form on wide screens, becoming a header
+// Same layout as Gemellus Cashflow: a brand panel (video over a green
+// background) beside the PIN form on wide screens, becoming a header
 // band above it on phones. The "Dev" badge marks local/preview builds, where
 // the PIN length rule and lockout are relaxed (see isRelaxedLogin).
 export default function LoginScreen({ role, error }: { role: LoginRole; error?: string }) {

@@ -53,8 +53,8 @@ PIN login, two roles, each with its own PIN in `.env.local`:
 
 On the live site PINs must be at least 6 characters and 5 wrong tries lock that
 network out for an hour; local `npm run dev` skips both. The login page's brand
-panel is green until the background video is added (set `LOGIN_VIDEO_SRC` in
-`src/components/LoginScreen.tsx` and put the file in `public/`).
+panel plays `public/vidbg.mp4` (set by `LOGIN_VIDEO_SRC` in
+`src/components/LoginScreen.tsx`).
 
 ## Getting started
 
@@ -76,6 +76,21 @@ Open http://localhost:3000.
   `TURSO_AUTH_TOKEN`. Run `npm run db:setup` once against it to create the tables.
   Do **not** run `seed:demo` against it — that adds sample products.
 - **Local file (development):** `TURSO_DATABASE_URL=file:data/momikie.db`, no token.
+
+### Demo data
+
+```bash
+npm run seed:simulation -- --yes             # two weeks of realistic store activity
+npm run db:reset -- --yes-delete-everything  # empty every table (keeps the schema)
+```
+
+`seed:simulation` only runs on an empty database. It creates a 27-item catalog
+and 6 credit customers, then plays out 14 days (ending today) through the app's
+own checkout, credit, void and stock logic: morning bread deliveries, cash /
+GCash / Maya / card / credit sales, down payments, credit payments, price
+overrides, voids, spoilage, a supplier price increase, and a few items left
+low on stock. Each day's records are dated to that day's store hours.
+**Run `db:reset` before the store starts using the system for real.**
 
 Every network trip to Turso costs ~350 ms from the Philippines (the database is in
 AWS us-east-1), so each write action reads once and then commits everything in a
