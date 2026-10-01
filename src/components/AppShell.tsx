@@ -1,3 +1,4 @@
+import { logoutAction } from "@/app/actions";
 import type { Role } from "@/lib/auth";
 import NavLinks, { type NavGroup } from "./NavLinks";
 
@@ -48,7 +49,7 @@ function todayLabel() {
   });
 }
 
-// Signed-out pages render without the chrome (login is currently off).
+// Signed-out pages (/login, /owner) render without the chrome.
 export default function AppShell({
   role,
   name,
@@ -75,9 +76,17 @@ export default function AppShell({
         <div className="flex-1 overflow-y-auto">
           <NavLinks groups={role === "owner" ? OWNER_NAV : CASHIER_NAV} />
         </div>
-        <div className="mt-4 border-t border-white/10 px-3 pt-4 text-xs text-white/55">
-          Signed in as <span className="font-medium text-white/85">{name}</span>
-        </div>
+        <form action={logoutAction} className="mt-4 border-t border-white/10 px-3 pt-4">
+          <div className="text-xs text-white/55">
+            Signed in as <span className="font-medium text-white/85">{name}</span>
+          </div>
+          <button
+            type="submit"
+            className="mt-2 w-full rounded-md border border-white/15 px-3 py-1.5 text-left text-sm text-white/80 transition hover:bg-white/10 hover:text-white"
+          >
+            Sign out
+          </button>
+        </form>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-line bg-surface px-8 py-3 text-sm print:hidden">

@@ -70,6 +70,25 @@ export interface LedgerEntry {
   actor_name: string | null;
   created_at: string;
   applied_to: string | null; // payments: receipt numbers this payment paid, comma-separated
+  // charges: the sale behind it
+  sale_total: number | null;
+  sale_paid_now: number | null; // down payment at the register
+  sale_credit_paid: number | null; // payments applied to this receipt so far
+}
+
+// One product line from a customer's credit purchase.
+export interface CreditItem {
+  item_id: number;
+  sale_id: number;
+  receipt_no: string;
+  sale_date: string;
+  voided: number; // 0/1
+  credit_amount: number;
+  credit_paid: number;
+  name: string;
+  qty: number;
+  unit_price: number;
+  line_total: number;
 }
 
 // A credit sale that still has something left to pay.

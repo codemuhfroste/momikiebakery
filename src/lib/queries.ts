@@ -2,6 +2,7 @@ import { getDb, type SqlTag } from "./db";
 import type {
   Category,
   Customer,
+  CreditItem,
   LedgerEntry,
   OpenCreditSale,
   PriceHistoryEntry,
@@ -115,7 +116,10 @@ export async function getLedger(customerId: number): Promise<LedgerEntry[]> {
   return sql<LedgerEntry[]>`
     SELECT l.*, s.receipt_no,
       (SELECT GROUP_CONCAT(s2.receipt_no, ', ') FROM credit_allocations a
-         JOIN sales s2 ON s2.id = a.sale_id WHERE a.payment_id = l.id) AS applied_to
+         JOIN sales s2 ON s2.id = a.sale_id WHERE a.payment_id = l.id) AS applied_to,
+      s.total AS sale_total,
+      s.amount_tendered AS sale_paid_now,
+      (SELECT COALESCE(SUM(a.amount), 0) FROM credit_allocations a WHERE a.sale_id = l.sale_id) AS sale_credit_paid
     FROM credit_ledger l LEFT JOIN sales s ON s.id = l.sale_id
     WHERE l.customer_id = ${customerId}
     ORDER BY l.created_at DESC, l.id DESC`;
@@ -133,6 +137,19 @@ export async function getOpenCreditSales(customerId: number, sql: SqlTag = getDb
       WHERE s.customer_id = ${customerId} AND s.credit_amount > 0 AND s.voided_at IS NULL
     ) WHERE outstanding > 0.004
     ORDER BY created_at, id`;
+}
+
+// Every product line on a customer's credit purchases, newest sale first.
+export async function getCreditItems(customerId: number): Promise<CreditItem[]> {
+  const sql = getDb();
+  return sql<CreditItem[]>`
+    SELECT i.id AS item_id, s.id AS sale_id, s.receipt_no, s.created_at AS sale_date,
+      (s.voided_at IS NOT NULL) AS voided, s.credit_amount,
+      (SELECT COALESCE(SUM(a.amount), 0) FROM credit_allocations a WHERE a.sale_id = s.id) AS credit_paid,
+      i.name, i.qty, i.unit_price, i.line_total
+    FROM sale_items i JOIN sales s ON s.id = i.sale_id
+    WHERE s.customer_id = ${customerId} AND s.credit_amount > 0
+    ORDER BY s.created_at DESC, s.id DESC, i.id`;
 }
 
 // Payments applied to one credit sale, oldest first.

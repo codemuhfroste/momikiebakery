@@ -9,9 +9,11 @@ import { btnPrimary, hintCls, inputCls, labelCls } from "./ui";
 export default function CreditPaymentForm({
   customerId,
   openSales,
+  itemSummaries = {},
 }: {
   customerId: number;
   openSales: OpenCreditSale[];
+  itemSummaries?: Record<number, string>; // sale id → "2 × Ensaymada, 1 × Sardines"
 }) {
   const [state, action, pending] = useActionState(recordPaymentAction, {});
   const [selected, setSelected] = useState<number[]>([]);
@@ -59,10 +61,13 @@ export default function CreditPaymentForm({
         <ul className="divide-y divide-line rounded-md border border-line">
           {openSales.map((s) => (
             <li key={s.id}>
-              <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50">
-                <input type="checkbox" checked={selected.includes(s.id)} onChange={() => toggle(s.id)} />
+              <label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm hover:bg-slate-50">
+                <input type="checkbox" className="mt-1" checked={selected.includes(s.id)} onChange={() => toggle(s.id)} />
                 <span className="flex-1">
                   <span className="font-medium">{s.receipt_no}</span>
+                  {itemSummaries[s.id] && (
+                    <span className="block text-xs text-ink/80">{itemSummaries[s.id]}</span>
+                  )}
                   <span className="block text-xs text-muted">
                     {formatDate(s.created_at.slice(0, 10))}
                     {s.paid > 0.004 && ` · ${formatCurrency(s.paid)} of ${formatCurrency(s.credit_amount)} paid`}

@@ -43,13 +43,22 @@ callback, so a camera or vendor-API scanner later only needs to call it.
 
 ## Access
 
-Login is disabled for now: the app treats everyone as the owner (`src/lib/rbac.ts`).
-The PIN/role code in `src/lib/auth.ts` is kept for when login comes back.
+PIN login, two roles, each with its own PIN in `.env.local`:
+
+- **Cashier** — signs in at `/login`; Register, Transactions and Credit Accounts
+  (can record credit payments).
+- **Owner** — signs in at the unlisted `/owner`; everything, including Products,
+  Inventory, the Dashboard, voids, customer limits and the Audit Log.
+
+On the live site PINs must be at least 6 characters and 5 wrong tries lock that
+network out for an hour; local `npm run dev` skips both. The login page's brand
+panel is green until the background video is added (set `LOGIN_VIDEO_SRC` in
+`src/components/LoginScreen.tsx` and put the file in `public/`).
 
 ## Getting started
 
 ```bash
-cp .env.example .env.local   # optional — auth is off, so no PINs needed
+cp .env.example .env.local   # then set AUTH_CASHIER_PIN and AUTH_OWNER_PIN
 npm install
 npm run db:setup             # creates/updates data/momikie.db (safe to re-run)
 npm run seed:demo -- --yes   # optional sample products
