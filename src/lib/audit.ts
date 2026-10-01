@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { getDb, runBatch, stmt, type Statement } from "./db";
 
 export interface AuditLogEntry {
   id: number;
@@ -24,24 +24,25 @@ const FILTER_PREFIXES: Record<Exclude<AuditFilter, "all">, string[]> = {
   auth: ["auth."],
 };
 
-export async function logAudit(input: {
+export interface AuditInput {
   actorName?: string;
   actorRole: string;
   action: string;
   summary: string;
   details?: Record<string, unknown>;
-}): Promise<void> {
-  const sql = getDb();
-  await sql`
+}
+
+// The INSERT for an audit entry, for including in the same batch as the
+// change it records (so the entry and the change succeed or fail together).
+export function auditStmt(input: AuditInput): Statement {
+  return stmt`
     INSERT INTO audit_log (actor_name, actor_role, action, summary, details)
-    VALUES (
-      ${input.actorName ?? null},
-      ${input.actorRole},
-      ${input.action},
-      ${input.summary},
-      ${input.details ? JSON.stringify(input.details) : null}
-    )
-  `;
+    VALUES (${input.actorName ?? null}, ${input.actorRole}, ${input.action}, ${input.summary},
+            ${input.details ? JSON.stringify(input.details) : null})`;
+}
+
+export async function logAudit(input: AuditInput): Promise<void> {
+  await runBatch([auditStmt(input)]);
 }
 
 const AUDIT_LOG_PAGE_SIZE = 50;

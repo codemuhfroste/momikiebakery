@@ -1,4 +1,4 @@
-import { getDb, type SqlTag } from "./db";
+import { getDb, readBatch, stmt, type Statement } from "./db";
 import type {
   Category,
   Customer,
@@ -126,9 +126,9 @@ export async function getLedger(customerId: number): Promise<LedgerEntry[]> {
 }
 
 // A customer's credit sales that still have an unpaid amount, oldest first.
-// Pass a transaction to read inside one (see recordCreditPayment).
-export async function getOpenCreditSales(customerId: number, sql: SqlTag = getDb()): Promise<OpenCreditSale[]> {
-  return sql<OpenCreditSale[]>`
+// The statement is exported so recordCreditPayment can read it in a batch.
+export function openCreditSalesStmt(customerId: number): Statement {
+  return stmt`
     SELECT * FROM (
       SELECT s.id, s.receipt_no, s.created_at, s.credit_amount,
         COALESCE((SELECT SUM(a.amount) FROM credit_allocations a WHERE a.sale_id = s.id), 0) AS paid,
@@ -137,6 +137,11 @@ export async function getOpenCreditSales(customerId: number, sql: SqlTag = getDb
       WHERE s.customer_id = ${customerId} AND s.credit_amount > 0 AND s.voided_at IS NULL
     ) WHERE outstanding > 0.004
     ORDER BY created_at, id`;
+}
+
+export async function getOpenCreditSales(customerId: number): Promise<OpenCreditSale[]> {
+  const [rows] = await readBatch<[OpenCreditSale[]]>([openCreditSalesStmt(customerId)]);
+  return rows;
 }
 
 // Every product line on a customer's credit purchases, newest sale first.

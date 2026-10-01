@@ -1,7 +1,8 @@
 # Momikie's POS
 
 A point-of-sale system for **Momikie's General Merchandise** (Momikie's Bakery).
-Runs locally on `localhost` with a local SQLite database file — no hosting needed.
+Runs on `localhost`; data lives in a hosted [Turso](https://turso.tech) database
+(or a local SQLite file for development).
 
 Built with Next.js (App Router) + TypeScript + Tailwind CSS, storing data in
 SQLite via [libSQL](https://github.com/tursodatabase/libsql-client-ts). Scaffolded
@@ -65,8 +66,23 @@ npm run seed:demo -- --yes   # optional sample products
 npm run dev
 ```
 
-Open http://localhost:3000. The database is the file `data/momikie.db`
-(git-ignored); back it up by copying it.
+Open http://localhost:3000.
+
+### Database
+
+`.env.local` decides which database is used:
+
+- **Turso (live data):** `TURSO_DATABASE_URL=libsql://…turso.io` plus
+  `TURSO_AUTH_TOKEN`. Run `npm run db:setup` once against it to create the tables.
+  Do **not** run `seed:demo` against it — that adds sample products.
+- **Local file (development):** `TURSO_DATABASE_URL=file:data/momikie.db`, no token.
+
+Every network trip to Turso costs ~350 ms from the Philippines (the database is in
+AWS us-east-1), so each write action reads once and then commits everything in a
+single batch (`runBatch` in `src/lib/db.ts`). Rules that must hold at save time
+(enough stock, credit limit, not already voided/paid) are checked inside that
+batch, so two registers can't oversell, double-void or over-pay. Keep new write
+paths to the same pattern.
 
 ## Layout
 

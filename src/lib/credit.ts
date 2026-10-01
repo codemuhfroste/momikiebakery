@@ -1,11 +1,11 @@
 // Customer and credit-account logic, kept free of Next.js request APIs (see
 // checkout.ts). The server actions in src/app/customers/actions.ts wrap these.
-import { getDb } from "./db";
-import { getOpenCreditSales } from "./queries";
-import { logAudit } from "./audit";
+import { GUARD_CHANGED, isGuardFailure, readBatch, runBatch, stmt, type Statement } from "./db";
+import { openCreditSalesStmt } from "./queries";
+import { auditStmt } from "./audit";
 import { formatCurrency, round2 } from "./format";
 import type { Actor } from "./checkout";
-import { CREDIT_PAYMENT_METHODS, type CreditPaymentMethod, type Customer } from "./types";
+import { CREDIT_PAYMENT_METHODS, type CreditPaymentMethod, type Customer, type OpenCreditSale } from "./types";
 
 export interface CustomerInput {
   name: string;
@@ -36,19 +36,21 @@ export async function createCustomer(
   const limit = validLimit(input.creditLimit);
   if (limit === "invalid") return { error: "Credit limit must be zero or more." };
 
-  const sql = getDb();
-  const [{ id }] = await sql<{ id: number }[]>`
-    INSERT INTO customers (name, phone, address, credit_limit, notes)
-    VALUES (${name}, ${clean(input.phone)}, ${clean(input.address)}, ${limit}, ${clean(input.notes)})
-    RETURNING id`;
-  await logAudit({
-    actorName: actor.name,
-    actorRole: actor.role,
-    action: "customer.create",
-    summary: `Added credit customer ${name}${limit != null ? ` (limit ${formatCurrency(limit)})` : " (no limit)"}`,
-    details: { customerId: id },
-  });
-  return { id };
+  // The SELECT runs right after the INSERT, so last_insert_rowid() is the
+  // new customer; the audit entry goes in the same batch.
+  const results = await runBatch([
+    stmt`INSERT INTO customers (name, phone, address, credit_limit, notes)
+         VALUES (${name}, ${clean(input.phone)}, ${clean(input.address)}, ${limit}, ${clean(input.notes)})`,
+    stmt`SELECT last_insert_rowid() AS id`,
+    auditStmt({
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: "customer.create",
+      summary: `Added credit customer ${name}${limit != null ? ` (limit ${formatCurrency(limit)})` : " (no limit)"}`,
+      details: { phone: clean(input.phone) },
+    }),
+  ]);
+  return { id: Number((results[1][0] as { id: number }).id) };
 }
 
 export async function updateCustomer(
@@ -61,35 +63,40 @@ export async function updateCustomer(
   const limit = validLimit(input.creditLimit);
   if (limit === "invalid") return { error: "Credit limit must be zero or more." };
 
-  const sql = getDb();
-  const [before] = await sql<Customer[]>`SELECT * FROM customers WHERE id = ${id}`;
+  const [[before]] = await readBatch<[Customer[]]>([stmt`SELECT * FROM customers WHERE id = ${id}`]);
   if (!before) return { error: "Customer not found." };
 
-  await sql`UPDATE customers SET name = ${name}, phone = ${clean(input.phone)},
-      address = ${clean(input.address)}, credit_limit = ${limit}, notes = ${clean(input.notes)},
-      is_active = ${input.isActive === false ? 0 : 1},
-      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-    WHERE id = ${id}`;
-
+  const batch: Statement[] = [
+    stmt`UPDATE customers SET name = ${name}, phone = ${clean(input.phone)},
+           address = ${clean(input.address)}, credit_limit = ${limit}, notes = ${clean(input.notes)},
+           is_active = ${input.isActive === false ? 0 : 1},
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE id = ${id}`,
+  ];
   const fmt = (v: number | null) => (v == null ? "no limit" : formatCurrency(v));
   if (before.credit_limit !== limit) {
-    await logAudit({
-      actorName: actor.name,
-      actorRole: actor.role,
-      action: "credit.limit_change",
-      summary: `Credit limit of ${name} changed ${fmt(before.credit_limit)} → ${fmt(limit)}`,
-      details: { customerId: id, oldLimit: before.credit_limit, newLimit: limit },
-    });
+    batch.push(
+      auditStmt({
+        actorName: actor.name,
+        actorRole: actor.role,
+        action: "credit.limit_change",
+        summary: `Credit limit of ${name} changed ${fmt(before.credit_limit)} → ${fmt(limit)}`,
+        details: { customerId: id, oldLimit: before.credit_limit, newLimit: limit },
+      })
+    );
   }
   if (before.name !== name || !!before.is_active !== (input.isActive !== false)) {
-    await logAudit({
-      actorName: actor.name,
-      actorRole: actor.role,
-      action: "customer.update",
-      summary: `Updated customer ${name}${input.isActive === false ? " (deactivated)" : ""}`,
-      details: { customerId: id },
-    });
+    batch.push(
+      auditStmt({
+        actorName: actor.name,
+        actorRole: actor.role,
+        action: "customer.update",
+        summary: `Updated customer ${name}${input.isActive === false ? " (deactivated)" : ""}`,
+        details: { customerId: id },
+      })
+    );
   }
+  await runBatch(batch);
   return { ok: "Saved." };
 }
 
@@ -111,58 +118,80 @@ export async function recordCreditPayment(
   const ids = [...new Set(saleIds.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
   if (ids.length === 0) return { error: "Select the receipt(s) being paid." };
 
-  const sql = getDb();
-  const [customer] = await sql<Customer[]>`
-    SELECT c.*, COALESCE((SELECT SUM(amount) FROM credit_ledger l WHERE l.customer_id = c.id), 0) AS balance
-    FROM customers c WHERE c.id = ${customerId}`;
+  const [[customer], openRows] = await readBatch<[Customer[], OpenCreditSale[]]>([
+    stmt`SELECT c.*, COALESCE((SELECT SUM(amount) FROM credit_ledger l WHERE l.customer_id = c.id), 0) AS balance
+         FROM customers c WHERE c.id = ${customerId}`,
+    openCreditSalesStmt(customerId),
+  ]);
   if (!customer) return { error: "Customer not found." };
 
-  try {
-    const applied = await sql.begin(async (tx) => {
-      const open = (await getOpenCreditSales(customerId, tx)).filter((s) => ids.includes(s.id));
-      if (open.length !== ids.length) {
-        throw new Error("One of the selected receipts is already paid, voided, or belongs to someone else.");
-      }
-      const due = round2(open.reduce((sum, s) => sum + s.outstanding, 0));
-      if (amount > due + 0.004) {
-        throw new Error(`That's more than the ${formatCurrency(due)} still owed on the selected receipts.`);
-      }
+  const open = openRows.filter((s) => ids.includes(s.id));
+  if (open.length !== ids.length) {
+    return { error: "One of the selected receipts is already paid, voided, or belongs to someone else." };
+  }
+  const due = round2(open.reduce((sum, s) => sum + s.outstanding, 0));
+  if (amount > due + 0.004) {
+    return { error: `That's more than the ${formatCurrency(due)} still owed on the selected receipts.` };
+  }
 
-      const [{ id: paymentId }] = await tx<{ id: number }[]>`
-        INSERT INTO credit_ledger (customer_id, entry_type, amount, payment_method, note, actor_name)
-        VALUES (${customerId}, 'payment', ${-amount}, ${method}, ${clean(note)}, ${actor.name})
-        RETURNING id`;
+  // Apply oldest first. Each allocation row is only written if that receipt
+  // still owes at least that much at commit time (GUARD_CHANGED aborts the
+  // batch otherwise), so two people recording the same payment can't
+  // over-pay a receipt.
+  const allocations: { saleId: number; receiptNo: string; amount: number }[] = [];
+  let left = amount;
+  for (const s of open) {
+    if (left <= 0.004) break;
+    const part = round2(Math.min(left, s.outstanding));
+    allocations.push({ saleId: s.id, receiptNo: s.receipt_no, amount: part });
+    left = round2(left - part);
+  }
+  const remaining = round2(customer.balance - amount);
 
-      let left = amount;
-      const allocations: { receiptNo: string; amount: number }[] = [];
-      for (const s of open) {
-        if (left <= 0.004) break;
-        const part = round2(Math.min(left, s.outstanding));
-        await tx`INSERT INTO credit_allocations (payment_id, sale_id, amount)
-                 VALUES (${paymentId}, ${s.id}, ${part})`;
-        allocations.push({ receiptNo: s.receipt_no, amount: part });
-        left = round2(left - part);
-      }
-      return allocations;
-    });
-
-    const remaining = round2(customer.balance - amount);
-    await logAudit({
+  const batch: Statement[] = [
+    stmt`INSERT INTO credit_ledger (customer_id, entry_type, amount, payment_method, note, actor_name)
+         VALUES (${customerId}, 'payment', ${-amount}, ${method}, ${clean(note)}, ${actor.name})`,
+  ];
+  allocations.forEach((a, i) => {
+    // The first allocation follows the ledger insert, so last_insert_rowid()
+    // is the payment; later ones follow an allocation, so read its payment_id.
+    const paymentId =
+      i === 0 ? "last_insert_rowid()" : "(SELECT payment_id FROM credit_allocations WHERE id = last_insert_rowid())";
+    batch.push(
+      {
+        sql: `INSERT INTO credit_allocations (payment_id, sale_id, amount)
+              SELECT ${paymentId}, ?, ?
+              WHERE (SELECT s.credit_amount - COALESCE((SELECT SUM(x.amount) FROM credit_allocations x WHERE x.sale_id = s.id), 0)
+                     FROM sales s WHERE s.id = ? AND s.customer_id = ? AND s.voided_at IS NULL) >= ? - 0.004`,
+        args: [a.saleId, a.amount, a.saleId, customerId, a.amount],
+      },
+      GUARD_CHANGED
+    );
+  });
+  batch.push(
+    auditStmt({
       actorName: actor.name,
       actorRole: actor.role,
       action: "credit.payment",
-      summary: `${customer.name} paid ${formatCurrency(amount)} (${method}) on ${applied
+      summary: `${customer.name} paid ${formatCurrency(amount)} (${method}) on ${allocations
         .map((a) => a.receiptNo)
         .join(", ")}; balance now ${formatCurrency(remaining)}`,
-      details: { customerId, amount, method, remaining, allocations: applied },
-    });
-    return {
-      ok:
-        remaining <= 0.004
-          ? "Payment recorded. The account is fully paid."
-          : `Payment recorded. Remaining balance: ${formatCurrency(remaining)}.`,
-    };
+      details: { customerId, amount, method, remaining, allocations },
+    })
+  );
+
+  try {
+    await runBatch(batch);
   } catch (err) {
+    if (isGuardFailure(err)) {
+      return { error: "Those receipts changed while saving (paid or voided elsewhere). Refresh and try again." };
+    }
     return { error: err instanceof Error ? err.message : "Could not record the payment." };
   }
+  return {
+    ok:
+      remaining <= 0.004
+        ? "Payment recorded. The account is fully paid."
+        : `Payment recorded. Remaining balance: ${formatCurrency(remaining)}.`,
+  };
 }
