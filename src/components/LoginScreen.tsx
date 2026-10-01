@@ -1,5 +1,6 @@
 import { loginAction } from "@/app/actions";
 import { isRelaxedLogin, type LoginRole } from "@/lib/auth";
+import SubmitButton from "./SubmitButton";
 
 // Background video for the brand panel. Leave null until the footage is
 // ready, then drop the file in public/ and set e.g. "/loginbg.mp4"; until
@@ -68,7 +69,7 @@ export default function LoginScreen({ role, error }: { role: LoginRole; error?: 
           )}
         </div>
 
-        <div className="relative hidden max-w-md lg:block">
+        <div className="relative hidden max-w-md animate-rise-in [animation-delay:120ms] lg:block">
           <p className="text-4xl font-bold leading-tight tracking-tight">
             Point of Sale System for Momikie&apos;s General Merchandise
           </p>
@@ -83,7 +84,7 @@ export default function LoginScreen({ role, error }: { role: LoginRole; error?: 
       </aside>
 
       <main className="flex items-center justify-center px-6 py-12 sm:px-10">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm animate-rise-in">
           <span className="grid h-12 w-12 place-items-center rounded-lg bg-brand-soft text-brand">
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
               {role === "owner" ? (
@@ -116,17 +117,17 @@ export default function LoginScreen({ role, error }: { role: LoginRole; error?: 
             </div>
 
             {message && (
-              <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
+              <p role="alert" className="animate-shake rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
                 {message}
               </p>
             )}
 
-            <button
-              type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand py-3.5 font-semibold text-white shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-brand-dark hover:shadow-lg active:translate-y-0 active:scale-[0.98]"
+            <SubmitButton
+              pendingLabel="Checking PIN…"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand py-3.5 font-semibold text-white shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-brand-dark hover:shadow-lg active:translate-y-0 active:scale-[0.98] disabled:translate-y-0 disabled:opacity-80"
             >
               {copy.button}
-            </button>
+            </SubmitButton>
           </form>
 
           <p className="mt-10 text-xs text-slate-400 lg:hidden">

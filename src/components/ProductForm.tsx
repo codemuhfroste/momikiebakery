@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { createProductAction, updateProductAction } from "@/app/products/actions";
 import type { Category, Product } from "@/lib/types";
-import { btnPrimary, hintCls, inputCls, labelCls } from "./ui";
+import { Spinner, btnPrimary, hintCls, inputCls, labelCls } from "./ui";
 
 export default function ProductForm({
   product,
@@ -83,10 +83,11 @@ export default function ProductForm({
 
       <div className="flex items-center gap-3 sm:col-span-2">
         <button className={btnPrimary} disabled={pending}>
+          {pending && <Spinner />}
           {product ? "Save changes" : "Add product"}
         </button>
-        {state.error && <span className="text-sm text-red-600">{state.error}</span>}
-        {state.ok && <span className="text-sm text-emerald-700">{state.ok}</span>}
+        {state.error && <span key={state.error} role="alert" className="inline-block animate-shake text-sm text-red-600">{state.error}</span>}
+        {state.ok && <span key={state.ok} className="inline-block animate-slide-down text-sm text-emerald-700">{state.ok}</span>}
       </div>
     </form>
   );

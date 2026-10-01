@@ -43,7 +43,7 @@ export default async function DashboardPage() {
       />
 
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Today</h2>
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="stagger mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Sales" value={formatCurrency(sales.total)} hint={`${sales.count} completed sales`} />
         <Stat label="Gross profit" value={formatCurrency(sales.profit)} hint="Sales minus the cost of items sold" />
         <Stat label="Credit payments received" value={formatCurrency(credit.collected)} />
@@ -56,12 +56,12 @@ export default async function DashboardPage() {
       </div>
 
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Overall</h2>
-      <div className="mb-8 grid gap-4 sm:grid-cols-2">
+      <div className="stagger mb-8 grid gap-4 sm:grid-cols-2">
         <Stat label="Total owed by customers" value={formatCurrency(credit.receivable)} hint={`${credit.debtors} customers with a balance`} />
         <Stat label="Products low or out of stock" value={String(low.count)} tone={low.count ? "warn" : "default"} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="stagger grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader title="Best sellers today" />
           {top.length === 0 ? (

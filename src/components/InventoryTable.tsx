@@ -62,7 +62,7 @@ export default function InventoryTable({ rows }: { rows: InventoryRow[] }) {
                 const open = openId === p.id;
                 return (
                   <Fragment key={p.id}>
-                    <tr className="hover:bg-slate-50">
+                    <tr className={`transition-colors hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}>
                       <td className="px-4 py-3 font-medium text-ink">{p.name}</td>
                       <td className="px-4 py-3 text-muted">{p.category_name ?? "—"}</td>
                       <td className="px-4 py-3 text-right font-medium tabular-nums">{formatQty(p.stock_qty)}</td>
@@ -84,7 +84,7 @@ export default function InventoryTable({ rows }: { rows: InventoryRow[] }) {
                     </tr>
                     {open && (
                       <tr className="bg-slate-50">
-                        <td colSpan={6} className="px-4">
+                        <td colSpan={6} className="animate-slide-down px-4">
                           <StockAdjustForm productId={p.id} />
                         </td>
                       </tr>

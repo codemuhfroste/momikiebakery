@@ -49,7 +49,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="stagger mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Total sales" value={formatCurrency(revenue)} hint={`${valid.length} completed sales`} />
         <Stat label="Sold on credit" value={formatCurrency(onCredit)} hint="Not yet paid — added to customer balances" />
         <Stat

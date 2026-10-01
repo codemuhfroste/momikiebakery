@@ -31,7 +31,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
         subtitle="How many of each product are on hand. Use Adjust to record a delivery, spoilage, or a count correction. Every change is listed under Stock history."
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="stagger mb-6 grid gap-4 sm:grid-cols-3">
         <Stat label="Stock value (at cost)" value={formatCurrency(stockValue)} hint="What the items on hand cost the store" />
         <Stat label="Low stock" value={String(low)} hint="At or below the reorder level" tone={low ? "warn" : "default"} />
         <Stat label="Out of stock" value={String(out)} tone={out ? "bad" : "default"} />

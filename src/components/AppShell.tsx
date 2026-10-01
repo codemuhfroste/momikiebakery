@@ -1,6 +1,7 @@
 import { logoutAction } from "@/app/actions";
 import type { Role } from "@/lib/auth";
 import NavLinks, { type NavGroup } from "./NavLinks";
+import SubmitButton from "./SubmitButton";
 
 const OWNER_NAV: NavGroup[] = [
   { label: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }] },
@@ -80,12 +81,12 @@ export default function AppShell({
           <div className="text-xs text-white/55">
             Signed in as <span className="font-medium text-white/85">{name}</span>
           </div>
-          <button
-            type="submit"
-            className="mt-2 w-full rounded-md border border-white/15 px-3 py-1.5 text-left text-sm text-white/80 transition hover:bg-white/10 hover:text-white"
+          <SubmitButton
+            pendingLabel="Signing out…"
+            className="mt-2 flex w-full items-center gap-2 rounded-md border border-white/15 px-3 py-1.5 text-left text-sm text-white/80 transition hover:bg-white/10 hover:text-white active:scale-[0.98]"
           >
             Sign out
-          </button>
+          </SubmitButton>
         </form>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

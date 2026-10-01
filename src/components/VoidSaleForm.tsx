@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { voidSaleAction } from "@/app/sales/actions";
-import { btnDanger, inputCls, labelCls } from "./ui";
+import { Spinner, btnDanger, inputCls, labelCls } from "./ui";
 
 export default function VoidSaleForm({ saleId }: { saleId: number }) {
   const [state, action, pending] = useActionState(voidSaleAction, {});
@@ -14,9 +14,10 @@ export default function VoidSaleForm({ saleId }: { saleId: number }) {
         <input name="reason" required placeholder="e.g. Wrong item rung up" className={inputCls} />
       </div>
       <button className={btnDanger} disabled={pending}>
+        {pending && <Spinner />}
         Void sale
       </button>
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {state.error && <p key={state.error} role="alert" className="animate-shake text-sm text-red-600">{state.error}</p>}
     </form>
   );
 }

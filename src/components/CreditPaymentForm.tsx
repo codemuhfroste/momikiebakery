@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { recordPaymentAction } from "@/app/customers/actions";
 import { formatCurrency, formatDate, round2 } from "@/lib/format";
 import { CREDIT_PAYMENT_METHODS, type OpenCreditSale } from "@/lib/types";
-import { btnPrimary, hintCls, inputCls, labelCls } from "./ui";
+import { Spinner, btnPrimary, hintCls, inputCls, labelCls } from "./ui";
 
 export default function CreditPaymentForm({
   customerId,
@@ -61,7 +61,11 @@ export default function CreditPaymentForm({
         <ul className="divide-y divide-line rounded-md border border-line">
           {openSales.map((s) => (
             <li key={s.id}>
-              <label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm hover:bg-slate-50">
+              <label
+                className={`flex cursor-pointer items-start gap-3 px-3 py-2 text-sm transition-colors duration-150 ${
+                  selected.includes(s.id) ? "bg-brand-soft" : "hover:bg-slate-50"
+                }`}
+              >
                 <input type="checkbox" className="mt-1" checked={selected.includes(s.id)} onChange={() => toggle(s.id)} />
                 <span className="flex-1">
                   <span className="font-medium">{s.receipt_no}</span>
@@ -115,10 +119,11 @@ export default function CreditPaymentForm({
         <input name="note" placeholder="e.g. GCash ref. no." className={inputCls} />
       </div>
       <button className={`${btnPrimary} w-full`} disabled={pending || selected.length === 0}>
+        {pending && <Spinner />}
         Record payment
       </button>
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
-      {state.ok && <p className="text-sm text-emerald-700">{state.ok}</p>}
+      {state.error && <p key={state.error} role="alert" className="animate-shake text-sm text-red-600">{state.error}</p>}
+      {state.ok && <p key={state.ok} className="animate-slide-down text-sm text-emerald-700">{state.ok}</p>}
     </form>
   );
 }

@@ -3,15 +3,15 @@ import type { ReactNode } from "react";
 
 // Shared class strings so every form control and button looks the same.
 export const inputCls =
-  "w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15";
+  "w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-ink transition-[border-color,box-shadow] duration-150 placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15";
 export const labelCls = "mb-1.5 block text-sm font-medium text-ink";
 export const hintCls = "mt-1 text-xs text-muted";
 export const btnPrimary =
-  "inline-flex items-center justify-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm transition duration-150 hover:bg-brand-dark hover:shadow active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100";
 export const btnSecondary =
-  "inline-flex items-center justify-center gap-2 rounded-md border border-line bg-white px-4 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-slate-50 disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-md border border-line bg-white px-4 py-2 text-sm font-medium text-ink shadow-sm transition duration-150 hover:border-slate-300 hover:bg-slate-50 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100";
 export const btnDanger =
-  "inline-flex items-center justify-center gap-2 rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 transition duration-150 hover:bg-red-50 active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100";
 
 export function PageHeader({
   title,
@@ -77,7 +77,7 @@ export function Stat({
 }) {
   const color = tone === "warn" ? "text-amber-700" : tone === "bad" ? "text-red-700" : "text-ink";
   return (
-    <Card className="p-5">
+    <Card className="p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div className="text-sm text-muted">{label}</div>
       <div className={`mt-1 text-2xl font-semibold tabular-nums ${color}`}>{value}</div>
       {hint && <div className="mt-1 text-xs text-muted">{hint}</div>}
@@ -117,7 +117,7 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "warn" | "
       : tone === "good"
         ? "border-emerald-200 bg-emerald-50 text-emerald-900"
         : "border-blue-200 bg-blue-50 text-blue-900";
-  return <div className={`rounded-md border px-4 py-3 text-sm ${cls}`}>{children}</div>;
+  return <div className={`animate-slide-down rounded-md border px-4 py-3 text-sm ${cls}`}>{children}</div>;
 }
 
 export function EmptyState({ children }: { children: ReactNode }) {
@@ -128,7 +128,7 @@ export function EmptyState({ children }: { children: ReactNode }) {
 export function Table({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm [&_tbody_tr]:border-t [&_tbody_tr]:border-line [&_tbody_tr:hover]:bg-slate-50 [&_td]:px-4 [&_td]:py-3 [&_th]:bg-slate-50 [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted">
+      <table className="w-full text-left text-sm [&_tbody_tr]:border-t [&_tbody_tr]:border-line [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-slate-50 [&_td]:px-4 [&_td]:py-3 [&_th]:bg-slate-50 [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted">
         {children}
       </table>
     </div>
@@ -149,7 +149,7 @@ export function Tabs({
         <Link
           key={t.key}
           href={t.href}
-          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-200 ${
             t.key === active ? "border-brand text-brand" : "border-transparent text-muted hover:text-ink"
           }`}
         >
@@ -157,5 +157,15 @@ export function Tabs({
         </Link>
       ))}
     </div>
+  );
+}
+
+// Small spinning circle for buttons that are busy ("Processing…").
+export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
   );
 }

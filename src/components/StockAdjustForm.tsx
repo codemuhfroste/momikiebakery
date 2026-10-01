@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { adjustStockAction } from "@/app/inventory/actions";
-import { btnPrimary, inputCls, labelCls } from "./ui";
+import { Spinner, btnPrimary, inputCls, labelCls } from "./ui";
 
 export default function StockAdjustForm({ productId }: { productId: number }) {
   const [state, action, pending] = useActionState(adjustStockAction, {});
@@ -33,10 +33,11 @@ export default function StockAdjustForm({ productId }: { productId: number }) {
         <input name="note" placeholder="e.g. supplier name" className={`${inputCls} w-56`} />
       </div>
       <button className={btnPrimary} disabled={pending}>
+        {pending && <Spinner />}
         Save
       </button>
-      {state.error && <span className="text-sm text-red-600">{state.error}</span>}
-      {state.ok && <span className="text-sm text-emerald-700">{state.ok}</span>}
+      {state.error && <span key={state.error} role="alert" className="inline-block animate-shake text-sm text-red-600">{state.error}</span>}
+      {state.ok && <span key={state.ok} className="inline-block animate-slide-down text-sm text-emerald-700">{state.ok}</span>}
     </form>
   );
 }

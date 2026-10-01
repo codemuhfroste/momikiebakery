@@ -47,8 +47,8 @@ export default function ScannerCheck() {
           <EmptyState>Waiting for a scan… click anywhere on this page (not in a text box) and scan a barcode.</EmptyState>
         ) : (
           <ul className="divide-y divide-line">
-            {scans.map((s, i) => (
-              <li key={i} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+            {scans.map((s) => (
+              <li key={`${s.at}-${s.code}`} className="flex animate-slide-down items-center justify-between gap-4 px-5 py-3 text-sm">
                 <div>
                   <div className="font-mono text-base">{s.code}</div>
                   <div className="text-xs text-muted">

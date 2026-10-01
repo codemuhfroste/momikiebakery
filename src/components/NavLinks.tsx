@@ -41,7 +41,7 @@ export default function NavLinks({ groups }: { groups: NavGroup[] }) {
                 <Link
                   key={n.href}
                   href={n.href}
-                  className={`flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm transition ${
+                  className={`group flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm transition-all duration-200 ${
                     active
                       ? "border-accent bg-white/10 font-medium text-white"
                       : "border-transparent text-white/70 hover:bg-white/5 hover:text-white"
@@ -49,7 +49,7 @@ export default function NavLinks({ groups }: { groups: NavGroup[] }) {
                 >
                   <svg
                     viewBox="0 0 24 24"
-                    className="h-[18px] w-[18px] shrink-0"
+                    className={`h-[18px] w-[18px] shrink-0 transition-transform duration-200 ${active ? "text-accent" : "group-hover:translate-x-0.5"}`}
                     fill="none"
                     stroke="currentColor"
                     strokeWidth={1.7}

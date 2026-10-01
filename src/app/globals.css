@@ -40,6 +40,101 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
+/* ---------- Motion ----------
+   Short and quiet to suit the formal look: things fade/rise into place,
+   respond when pressed, and briefly flash when something just happened
+   (an item scanned, a total changed, a wrong PIN). Used as Tailwind
+   classes: animate-page-in, animate-rise-in, animate-pop, etc.
+   Entry animations use fill-mode "backwards" so once finished they let go of
+   the element — otherwise a held transform would block hover effects. */
+@theme {
+  --animate-page-in: page-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  --animate-rise-in: rise-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  --animate-fade-in: fade-in 0.2s ease-out backwards;
+  --animate-scale-in: scale-in 0.22s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  --animate-slide-in: slide-in 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  --animate-slide-down: slide-down 0.22s ease-out backwards;
+  --animate-pop: pop 0.3s ease-out;
+  --animate-flash: flash 0.7s ease-out backwards;
+  --animate-shake: shake 0.4s ease-in-out;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96) translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(12px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes slide-down {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.06); }
+    100% { transform: scale(1); }
+  }
+  @keyframes flash {
+    /* Translucent so the tile's text stays readable underneath. */
+    from { box-shadow: inset 0 0 0 2px var(--brand); background-color: color-mix(in srgb, var(--brand) 12%, transparent); }
+    to { box-shadow: inset 0 0 0 2px transparent; background-color: transparent; }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+}
+
+/* Children of a .stagger container rise in one after another
+   (stat cards, dashboard panels). */
+.stagger > * {
+  animation: var(--animate-rise-in);
+}
+.stagger > *:nth-child(2) { animation-delay: 50ms; }
+.stagger > *:nth-child(3) { animation-delay: 100ms; }
+.stagger > *:nth-child(4) { animation-delay: 150ms; }
+.stagger > *:nth-child(5) { animation-delay: 200ms; }
+.stagger > *:nth-child(n + 6) { animation-delay: 250ms; }
+
+/* Skeleton placeholder shown while a page loads. */
+.skeleton {
+  border-radius: 0.375rem;
+  background: linear-gradient(90deg, #e9edf3 25%, #f4f6f9 50%, #e9edf3 75%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Respect "reduce motion": no movement, just instant state changes. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Receipts print on their own, without the sidebar or top bar. */
 @media print {
   body {

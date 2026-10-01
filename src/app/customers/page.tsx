@@ -23,7 +23,7 @@ export default async function CustomersPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="stagger mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Total owed to the store" value={formatCurrency(summary.receivable)} />
         <Stat label="Customers with a balance" value={String(summary.debtors)} />
         <Stat label="Payments received today" value={formatCurrency(summary.collected)} />

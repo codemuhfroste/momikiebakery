@@ -9,7 +9,7 @@ import { MIN_BARCODE_LENGTH, normalizeBarcode } from "@/lib/barcode";
 import { formatCurrency, formatQty, round2 } from "@/lib/format";
 import { useBarcodeScanner } from "@/lib/useBarcodeScanner";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/types";
-import { Badge, btnPrimary, btnSecondary, inputCls, labelCls } from "./ui";
+import { Badge, Spinner, btnPrimary, btnSecondary, inputCls, labelCls } from "./ui";
 
 export interface PosProduct {
   id: number;
@@ -62,6 +62,9 @@ export default function PosClient({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [unknownCode, setUnknownCode] = useState<string | null>(null);
+  // Bumped on every add so the tile flash and notice animation replay even
+  // when the same product is added twice in a row.
+  const [flash, setFlash] = useState<{ id: number; n: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const q = query.trim().toLowerCase();
@@ -75,6 +78,7 @@ export default function PosClient({
 
   function addProduct(product: PosProduct, barcode: string | null = null) {
     setNotice(null);
+    setFlash((f) => ({ id: product.id, n: (f?.n ?? 0) + 1 }));
     setCart((prev) => {
       const existing = prev.find((l) => l.product.id === product.id);
       if (existing) {
@@ -191,7 +195,12 @@ export default function PosClient({
           />
           <div className="mt-1.5 h-5 text-sm">
             {notice && (
-              <span className={notice.tone === "ok" ? "text-emerald-700" : "text-red-600"}>{notice.text}</span>
+              <span
+                key={`${notice.text}-${flash?.n ?? 0}`}
+                className={`inline-block animate-slide-down ${notice.tone === "ok" ? "text-emerald-700" : "text-red-600"}`}
+              >
+                {notice.text}
+              </span>
             )}
           </div>
         </div>
@@ -204,8 +213,11 @@ export default function PosClient({
                 type="button"
                 disabled={out}
                 onClick={() => addProduct(p)}
-                className="flex flex-col rounded-lg border border-line bg-surface p-3 text-left shadow-sm transition hover:border-brand hover:ring-1 hover:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
+                className="relative flex flex-col rounded-lg border border-line bg-surface p-3 text-left shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-brand hover:shadow-md hover:ring-1 hover:ring-brand active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-sm"
               >
+                {flash?.id === p.id && (
+                  <span key={flash.n} aria-hidden className="pointer-events-none absolute inset-0 animate-flash rounded-lg" />
+                )}
                 <span className="text-xs text-muted">{p.category_name ?? "Uncategorized"}</span>
                 <span className="mt-0.5 line-clamp-2 min-h-10 text-sm font-medium text-ink">{p.name}</span>
                 <span className="mt-2 flex items-center justify-between">
@@ -243,7 +255,7 @@ export default function PosClient({
           {cart.map((l) => {
             const changed = Math.abs(l.unitPrice - l.product.srp) > 0.004;
             return (
-              <div key={l.product.id} className="px-5 py-3">
+              <div key={l.product.id} className="animate-slide-in px-5 py-3">
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-sm font-medium text-ink">{l.product.name}</span>
                   <button
@@ -283,7 +295,7 @@ export default function PosClient({
                     aria-label="Unit price"
                     value={l.unitPrice}
                     onChange={(e) => updateLine(l.product.id, { unitPrice: Number(e.target.value) })}
-                    className={`w-20 rounded-md border px-2 py-1 text-sm tabular-nums ${
+                    className={`w-20 rounded-md border px-2 py-1 text-sm tabular-nums transition-colors duration-200 ${
                       changed ? "border-amber-400 bg-amber-50" : "border-line"
                     }`}
                   />
@@ -292,7 +304,7 @@ export default function PosClient({
                   </span>
                 </div>
                 {changed && (
-                  <div className="mt-1.5 flex items-center gap-2 text-xs text-amber-800">
+                  <div className="mt-1.5 flex animate-slide-down items-center gap-2 text-xs text-amber-800">
                     <Badge tone="warn">Not SRP</Badge>
                     SRP is {formatCurrency(l.product.srp)}.
                     <button
@@ -334,7 +346,9 @@ export default function PosClient({
           </div>
           <div className="flex justify-between border-t border-line pt-3 text-xl font-semibold text-ink">
             <span>Total</span>
-            <span className="tabular-nums">{formatCurrency(total)}</span>
+            <span key={total} className="inline-block animate-pop tabular-nums">
+              {formatCurrency(total)}
+            </span>
           </div>
 
           <div>
@@ -358,7 +372,7 @@ export default function PosClient({
           </div>
 
           {method === "Cash" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid animate-slide-down grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Cash received</label>
                 <input
@@ -393,7 +407,11 @@ export default function PosClient({
             />
           )}
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <p key={error} role="alert" className="animate-shake text-sm text-red-600">
+              {error}
+            </p>
+          )}
 
           <button
             type="button"
@@ -402,7 +420,11 @@ export default function PosClient({
             className={`${btnPrimary} w-full py-3 text-base`}
           >
             {pending
-              ? "Processing…"
+              ? (
+                <>
+                  <Spinner /> Processing…
+                </>
+              )
               : isCredit
                 ? `Charge ${formatCurrency(Math.max(creditAmount, 0))} to account`
                 : `Complete sale · ${formatCurrency(total)}`}
@@ -473,7 +495,7 @@ function CreditPanel({
   }
 
   return (
-    <div className="space-y-3 rounded-md border border-line bg-slate-50 p-3">
+    <div className="animate-slide-down space-y-3 rounded-md border border-line bg-slate-50 p-3">
       {customer ? (
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -573,8 +595,8 @@ function UnknownBarcodeModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-md rounded-lg bg-surface p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-slate-900/50 p-4">
+      <div className="w-full max-w-md animate-scale-in rounded-lg bg-surface p-6 shadow-xl">
         <h2 className="text-lg font-semibold">Barcode not registered</h2>
         <p className="mt-1 text-sm text-muted">
           The barcode <span className="font-mono text-ink">{code}</span> is not linked to any product. Link it to
