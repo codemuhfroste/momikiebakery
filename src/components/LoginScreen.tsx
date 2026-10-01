@@ -70,15 +70,15 @@ export default function LoginScreen({ role, error }: { role: LoginRole; error?: 
 
         <div className="relative hidden max-w-md animate-rise-in [animation-delay:120ms] lg:block">
           <p className="text-4xl font-bold leading-tight tracking-tight">
-            Point of Sale System for Momikie&apos;s General Merchandise
+            POS (Point of Sale System) With Credit Tracking
           </p>
           <p className="mt-4 text-base text-white/80">
-            Ring up sales, keep stock in check, and track every customer&apos;s credit in one place.
+            All in one sales and management system for Momikie&apos;s General Merchandise.
           </p>
         </div>
 
-        <p className="relative mt-6 hidden text-xs text-white/70 lg:block">
-          Developed by <span className="font-semibold text-white/90">JM Labalan</span>
+        <p className="relative mt-6 hidden text-sm text-white/85 drop-shadow lg:block">
+          Developed by <span className="font-semibold text-white">JM Labalan</span>
         </p>
       </aside>
 

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/rbac";
+import { canManage, getSession } from "@/lib/rbac";
 import { createCustomer, recordCreditPayment, updateCustomer, type CustomerInput } from "@/lib/credit";
 import type { ActionState } from "@/lib/actionState";
 import type { CreditPaymentMethod } from "@/lib/types";
@@ -21,7 +21,7 @@ function readCustomer(fd: FormData): CustomerInput {
 
 export async function createCustomerAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const session = await getSession();
-  if (session?.role !== "owner") return { error: "Only the owner can add credit customers." };
+  if (!canManage(session)) return { error: "Only the owner can add credit customers." };
   const result = await createCustomer(session, readCustomer(fd));
   if ("error" in result) return result;
   revalidatePath("/", "layout");
@@ -30,7 +30,7 @@ export async function createCustomerAction(_: ActionState, fd: FormData): Promis
 
 export async function updateCustomerAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const session = await getSession();
-  if (session?.role !== "owner") return { error: "Only the owner can edit customers." };
+  if (!canManage(session)) return { error: "Only the owner can edit customers." };
   const result = await updateCustomer(session, Number(fd.get("id")), readCustomer(fd));
   if (result.ok) revalidatePath("/", "layout");
   return result;

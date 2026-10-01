@@ -1,4 +1,4 @@
-import { requireOwnerOrRedirect } from "@/lib/rbac";
+import { requireManagerOrRedirect } from "@/lib/rbac";
 import { listProducts, listStockMovements } from "@/lib/queries";
 import { formatCurrency, formatDateTime, formatQty } from "@/lib/format";
 import { stockStatus } from "@/lib/types";
@@ -14,7 +14,7 @@ const REASON_LABELS: Record<string, string> = {
 };
 
 export default async function InventoryPage({ searchParams }: PageProps<"/inventory">) {
-  await requireOwnerOrRedirect();
+  await requireManagerOrRedirect();
   const { filter: f } = await searchParams;
   const filter = f === "low" || f === "out" ? f : "all";
 

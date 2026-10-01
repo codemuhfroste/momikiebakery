@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { STAFF_SEES_OWNER_TABS } from "@/lib/demo";
 
 // Signed-out visitors go to /login. Cashiers only get the register,
 // transactions, credit accounts and the scan lookup; everything else is
@@ -14,8 +15,12 @@ export async function proxy(request: NextRequest) {
 
   if (session.role === "cashier") {
     const { pathname } = request.nextUrl;
-    const allowed = CASHIER_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-    if (!allowed || CASHIER_BLOCKED.includes(pathname)) return NextResponse.redirect(new URL("/pos", request.url));
+    // Demo: staff may open everything except the audit log.
+    const allowed = STAFF_SEES_OWNER_TABS
+      ? !(pathname === "/audit-log" || pathname.startsWith("/audit-log/"))
+      : CASHIER_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) &&
+        !CASHIER_BLOCKED.includes(pathname);
+    if (!allowed) return NextResponse.redirect(new URL("/pos", request.url));
   }
 
   return NextResponse.next();

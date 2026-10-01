@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, verifySessionToken, type SessionPayload } from "@/lib/auth";
+import { STAFF_SEES_OWNER_TABS } from "@/lib/demo";
 
 export async function getSession(): Promise<SessionPayload | null> {
   const store = await cookies();
@@ -14,7 +15,21 @@ export async function requireSessionOrRedirect(): Promise<SessionPayload> {
   return session;
 }
 
-// For owner-only surfaces (products, inventory, voids, audit log).
+// Who may manage the store: products, inventory, dashboard, credit
+// customers. Normally the owner only; while STAFF_SEES_OWNER_TABS is on
+// (demo), staff too.
+export function canManage(session: SessionPayload | null): session is SessionPayload {
+  return session?.role === "owner" || (STAFF_SEES_OWNER_TABS && session?.role === "cashier");
+}
+
+export async function requireManagerOrRedirect(): Promise<SessionPayload> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+  if (!canManage(session)) redirect("/pos");
+  return session;
+}
+
+// Strictly owner-only, even in the demo: the audit log and voiding sales.
 export async function requireOwnerOrRedirect(): Promise<SessionPayload> {
   const session = await getSession();
   if (!session) redirect("/login");

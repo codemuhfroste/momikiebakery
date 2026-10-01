@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
-import { requireOwnerOrRedirect } from "@/lib/rbac";
+import { requireManagerOrRedirect } from "@/lib/rbac";
 import { getPriceHistory, getProduct, listCategories } from "@/lib/queries";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { Card, CardHeader, PageHeader, Table } from "@/components/ui";
 import ProductForm from "@/components/ProductForm";
 
 export default async function ProductPage({ params }: PageProps<"/products/[id]">) {
-  await requireOwnerOrRedirect();
+  await requireManagerOrRedirect();
   const { id } = await params;
   const product = await getProduct(Number(id));
   if (!product) notFound();

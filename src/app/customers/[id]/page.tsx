@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireSessionOrRedirect } from "@/lib/rbac";
+import { canManage, requireSessionOrRedirect } from "@/lib/rbac";
 import { getCreditItems, getCustomer, getLedger, getOpenCreditSales } from "@/lib/queries";
 import { formatCurrency, formatDate, formatDateTime, formatQty } from "@/lib/format";
 import { CREDIT_STATUS_LABELS, accountStatus, creditPaymentStatus, type CreditItem } from "@/lib/types";
@@ -252,7 +252,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
               <CreditPaymentForm customerId={customer.id} openSales={openSales} itemSummaries={itemSummaries} />
             </div>
           </Card>
-          {session.role === "owner" && (
+          {canManage(session) && (
             <Card>
               <CardHeader title="Customer details" />
               <div className="p-5">

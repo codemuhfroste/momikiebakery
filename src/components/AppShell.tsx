@@ -2,6 +2,7 @@ import { logoutAction } from "@/app/actions";
 import type { Role } from "@/lib/auth";
 import NavLinks, { type NavGroup } from "./NavLinks";
 import SubmitButton from "./SubmitButton";
+import { STAFF_SEES_OWNER_TABS } from "@/lib/demo";
 
 const OWNER_NAV: NavGroup[] = [
   { label: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }] },
@@ -50,6 +51,12 @@ function todayLabel() {
   });
 }
 
+// Demo (STAFF_SEES_OWNER_TABS): staff get every owner tab except the Audit Log.
+const STAFF_DEMO_NAV: NavGroup[] = OWNER_NAV.map((g) => ({
+  ...g,
+  items: g.items.filter((i) => i.href !== "/audit-log"),
+})).filter((g) => g.items.length > 0);
+
 // Signed-out pages (/login, /owner) render without the chrome.
 export default function AppShell({
   role,
@@ -75,7 +82,7 @@ export default function AppShell({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <NavLinks groups={role === "owner" ? OWNER_NAV : CASHIER_NAV} />
+          <NavLinks groups={role === "owner" ? OWNER_NAV : STAFF_SEES_OWNER_TABS ? STAFF_DEMO_NAV : CASHIER_NAV} />
         </div>
         <form action={logoutAction} className="mt-4 border-t border-white/10 px-3 pt-4">
           <div className="text-xs text-white/55">

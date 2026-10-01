@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { requireOwnerOrRedirect } from "@/lib/rbac";
+import { requireManagerOrRedirect } from "@/lib/rbac";
 import { getDb } from "@/lib/db";
 import { getCreditSummary, listCustomers } from "@/lib/queries";
 import { formatCurrency, manilaDayRange, manilaToday } from "@/lib/format";
 import { Card, CardHeader, PageHeader, Stat, btnPrimary, btnSecondary } from "@/components/ui";
 
 export default async function DashboardPage() {
-  await requireOwnerOrRedirect();
+  await requireManagerOrRedirect();
   const sql = getDb();
   const [start, end] = manilaDayRange(manilaToday());
 

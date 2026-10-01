@@ -92,6 +92,14 @@ overrides, voids, spoilage, a supplier price increase, and a few items left
 low on stock. Each day's records are dated to that day's store hours.
 **Run `db:reset` before the store starts using the system for real.**
 
+### Demo switches (`src/lib/demo.ts`)
+
+- `SHOW_DEMO_BANNER` — the "FOR DEMO PURPOSES ONLY" bar across the top of every page.
+- `STAFF_SEES_OWNER_TABS` — temporarily lets the cashier login use every owner tab
+  except the Audit Log (voiding sales also stays owner-only).
+
+Set both to `false` when going live.
+
 Every network trip to Turso costs ~350 ms from the Philippines (the database is in
 AWS us-east-1), so each write action reads once and then commits everything in a
 single batch (`runBatch` in `src/lib/db.ts`). Rules that must hold at save time

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/rbac";
+import { canManage, getSession } from "@/lib/rbac";
 import { isUniqueFailure, readBatch, runBatch, stmt, type Statement } from "@/lib/db";
 import { auditStmt } from "@/lib/audit";
 import { round2 } from "@/lib/format";
@@ -10,9 +10,9 @@ import { normalizeBarcode } from "@/lib/barcode";
 import type { ActionState } from "@/lib/actionState";
 import type { Product } from "@/lib/types";
 
-async function ownerOnly() {
+async function managerOnly() {
   const session = await getSession();
-  return session?.role === "owner" ? session : null;
+  return canManage(session) ? session : null;
 }
 
 function text(fd: FormData, key: string): string | null {
@@ -26,7 +26,7 @@ function money(fd: FormData, key: string): number | null {
 }
 
 export async function createProductAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  const session = await ownerOnly();
+  const session = await managerOnly();
   if (!session) return { error: "Only the owner can add products." };
 
   const name = text(fd, "name");
@@ -67,7 +67,7 @@ export async function createProductAction(_: ActionState, fd: FormData): Promise
 }
 
 export async function updateProductAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  const session = await ownerOnly();
+  const session = await managerOnly();
   if (!session) return { error: "Only the owner can edit products." };
 
   const id = Number(fd.get("id"));
@@ -139,7 +139,7 @@ export async function updateProductAction(_: ActionState, fd: FormData): Promise
 // Links a scanned barcode to an existing product (used by the register when a
 // scan doesn't match anything).
 export async function attachBarcodeAction(productId: number, rawCode: string): Promise<ActionState> {
-  const session = await ownerOnly();
+  const session = await managerOnly();
   if (!session) return { error: "Only the owner can register barcodes." };
   const code = normalizeBarcode(rawCode);
   if (!code) return { error: "No barcode to attach." };

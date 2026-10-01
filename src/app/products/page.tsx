@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { requireOwnerOrRedirect } from "@/lib/rbac";
+import { requireManagerOrRedirect } from "@/lib/rbac";
 import { listProducts } from "@/lib/queries";
 import { formatCurrency } from "@/lib/format";
 import { Badge, Card, EmptyState, PageHeader, Table, btnPrimary } from "@/components/ui";
 
 export default async function ProductsPage() {
-  await requireOwnerOrRedirect();
+  await requireManagerOrRedirect();
   const products = await listProducts();
 
   return (

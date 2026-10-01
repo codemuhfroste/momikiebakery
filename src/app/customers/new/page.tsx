@@ -1,9 +1,9 @@
-import { requireOwnerOrRedirect } from "@/lib/rbac";
+import { requireManagerOrRedirect } from "@/lib/rbac";
 import { Card, PageHeader } from "@/components/ui";
 import CustomerForm from "@/components/CustomerForm";
 
 export default async function NewCustomerPage() {
-  await requireOwnerOrRedirect();
+  await requireManagerOrRedirect();
   return (
     <>
       <PageHeader

@@ -1,10 +1,10 @@
-import { requireOwnerOrRedirect } from "@/lib/rbac";
+import { requireManagerOrRedirect } from "@/lib/rbac";
 import { listCategories } from "@/lib/queries";
 import { Card, PageHeader } from "@/components/ui";
 import ProductForm from "@/components/ProductForm";
 
 export default async function NewProductPage({ searchParams }: PageProps<"/products/new">) {
-  await requireOwnerOrRedirect();
+  await requireManagerOrRedirect();
   const { barcode } = await searchParams;
   const categories = await listCategories();
   return (
