@@ -10,6 +10,7 @@ import { formatCurrency, formatQty, round2 } from "@/lib/format";
 import { useBarcodeScanner } from "@/lib/useBarcodeScanner";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/types";
 import { Badge, Spinner, btnPrimary, btnSecondary, inputCls, labelCls } from "./ui";
+import ProductThumb from "./ProductThumb";
 
 export interface PosProduct {
   id: number;
@@ -19,6 +20,7 @@ export interface PosProduct {
   category_name: string | null;
   srp: number;
   stock_qty: number;
+  photo_version: string | null;
 }
 
 export interface PosCustomer {
@@ -218,6 +220,7 @@ export default function PosClient({
                 {flash?.id === p.id && (
                   <span key={flash.n} aria-hidden className="pointer-events-none absolute inset-0 animate-flash rounded-lg" />
                 )}
+                <ProductThumb product={p} className="mb-2 aspect-square h-auto w-full" textClass="text-2xl" />
                 <span className="text-xs text-muted">{p.category_name ?? "Uncategorized"}</span>
                 <span className="mt-0.5 line-clamp-2 min-h-10 text-sm font-medium text-ink">{p.name}</span>
                 <span className="mt-2 flex items-center justify-between">
@@ -257,7 +260,10 @@ export default function PosClient({
             return (
               <div key={l.product.id} className="animate-slide-in px-5 py-3">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-medium text-ink">{l.product.name}</span>
+                  <span className="flex items-center gap-2.5 text-sm font-medium text-ink">
+                    <ProductThumb product={l.product} className="h-9 w-9" textClass="text-[10px]" />
+                    {l.product.name}
+                  </span>
                   <button
                     type="button"
                     aria-label={`Remove ${l.product.name}`}
@@ -618,7 +624,10 @@ function UnknownBarcodeModal({
                 onClick={() => attach(p)}
                 className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-brand-soft disabled:opacity-50"
               >
-                <span>{p.name}</span>
+                <span className="flex items-center gap-2.5">
+                  <ProductThumb product={p} className="h-8 w-8" textClass="text-[10px]" />
+                  {p.name}
+                </span>
                 <span className="text-xs text-muted">{p.barcode ? "has a barcode" : "no barcode yet"}</span>
               </button>
             </li>

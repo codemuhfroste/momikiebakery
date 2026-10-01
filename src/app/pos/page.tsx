@@ -25,6 +25,7 @@ export default async function PosPage() {
           category_name: p.category_name,
           srp: p.srp,
           stock_qty: p.stock_qty,
+          photo_version: p.photo_version,
         }))}
         customers={customers.map((c) => ({
           id: c.id,

@@ -7,6 +7,7 @@ import { stockStatus } from "@/lib/types";
 import { Badge, btnSecondary } from "./ui";
 import StockAdjustForm from "./StockAdjustForm";
 import TableControls from "./TableControls";
+import ProductThumb from "./ProductThumb";
 
 export interface InventoryRow {
   id: number;
@@ -14,6 +15,7 @@ export interface InventoryRow {
   category_name: string | null;
   stock_qty: number;
   reorder_level: number;
+  photo_version: string | null;
 }
 
 const SORT_OPTIONS = [
@@ -63,7 +65,12 @@ export default function InventoryTable({ rows }: { rows: InventoryRow[] }) {
                 return (
                   <Fragment key={p.id}>
                     <tr className={`transition-colors hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}>
-                      <td className="px-4 py-3 font-medium text-ink">{p.name}</td>
+                      <td className="px-4 py-3 font-medium text-ink">
+                        <span className="flex items-center gap-3">
+                          <ProductThumb product={p} className="h-9 w-9" textClass="text-[10px]" />
+                          {p.name}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-muted">{p.category_name ?? "—"}</td>
                       <td className="px-4 py-3 text-right font-medium tabular-nums">{formatQty(p.stock_qty)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-muted">{formatQty(p.reorder_level)}</td>

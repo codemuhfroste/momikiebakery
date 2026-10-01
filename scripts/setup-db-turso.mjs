@@ -37,6 +37,16 @@ const statements = [
     updated_at TEXT NOT NULL DEFAULT ${NOW}
   )`,
   `CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)`,
+  // One photo per product, kept out of the products table so product lists
+  // stay small. `data` is base64 of a small (~30-50 KB) image resized in the
+  // browser before upload. products.photo_version changes on every new
+  // photo, so the image URL changes and browsers fetch the new one.
+  `CREATE TABLE IF NOT EXISTS product_photos (
+    product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+    mime TEXT NOT NULL,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT ${NOW}
+  )`,
   // Every change to a product's SRP (suggested retail price), old -> new.
   `CREATE TABLE IF NOT EXISTS price_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,6 +176,7 @@ for (const statement of statements) {
 const addedColumns = [
   ["sales", "customer_id", "INTEGER REFERENCES customers(id) ON DELETE SET NULL"],
   ["sales", "credit_amount", "REAL NOT NULL DEFAULT 0"],
+  ["products", "photo_version", "TEXT"],
 ];
 for (const [table, column, type] of addedColumns) {
   const { rows } = await db.execute(`PRAGMA table_info(${table})`);

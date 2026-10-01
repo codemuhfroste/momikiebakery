@@ -24,6 +24,13 @@ export interface Product {
   stock_qty: number;
   reorder_level: number;
   is_active: number; // 0/1
+  photo_version: string | null; // null = no photo
+}
+
+// URL of a product's photo, or null if it has none. The version is in the URL
+// so a new photo gets a new URL (old one can be cached forever).
+export function productPhotoUrl(p: { id: number; photo_version: string | null }): string | null {
+  return p.photo_version ? `/api/products/${p.id}/photo?v=${p.photo_version}` : null;
 }
 
 export interface Sale {

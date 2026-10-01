@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireManagerOrRedirect } from "@/lib/rbac";
 import { listProducts } from "@/lib/queries";
 import { formatCurrency } from "@/lib/format";
+import ProductThumb from "@/components/ProductThumb";
 import { Badge, Card, EmptyState, PageHeader, Table, btnPrimary } from "@/components/ui";
 
 export default async function ProductsPage() {
@@ -39,10 +40,15 @@ export default async function ProductsPage() {
               {products.map((p) => (
                 <tr key={p.id} className={p.is_active ? "" : "opacity-50"}>
                   <td>
-                    <Link href={`/products/${p.id}`} className="font-medium text-brand hover:underline">
-                      {p.name}
-                    </Link>
-                    {p.sku && <div className="text-xs text-muted">{p.sku}</div>}
+                    <div className="flex items-center gap-3">
+                      <ProductThumb product={p} />
+                      <div>
+                        <Link href={`/products/${p.id}`} className="font-medium text-brand hover:underline">
+                          {p.name}
+                        </Link>
+                        {p.sku && <div className="text-xs text-muted">{p.sku}</div>}
+                      </div>
+                    </div>
                   </td>
                   <td className="font-mono text-xs">{p.barcode ?? "—"}</td>
                   <td>{p.category_name ?? "—"}</td>

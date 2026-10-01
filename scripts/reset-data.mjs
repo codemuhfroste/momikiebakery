@@ -26,6 +26,7 @@ const tables = [
   "sale_items",
   "sales",
   "price_history",
+  "product_photos",
   "products",
   "categories",
   "customers",

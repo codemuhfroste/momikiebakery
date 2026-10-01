@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createProductAction, updateProductAction } from "@/app/products/actions";
 import type { Category, Product } from "@/lib/types";
 import { Spinner, btnPrimary, hintCls, inputCls, labelCls } from "./ui";
+import ProductPhotoField from "./ProductPhotoField";
 
 export default function ProductForm({
   product,
@@ -23,6 +24,9 @@ export default function ProductForm({
     <form action={action} className="grid gap-4 sm:grid-cols-2">
       {product && <input type="hidden" name="id" value={product.id} />}
 
+      <div className="sm:col-span-2">
+        <ProductPhotoField product={product} />
+      </div>
       <div className="sm:col-span-2">
         <label className={labelCls}>Product name</label>
         <input name="name" required defaultValue={product?.name} className={inputCls} />

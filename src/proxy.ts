@@ -3,9 +3,9 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { STAFF_SEES_OWNER_TABS } from "@/lib/demo";
 
 // Signed-out visitors go to /login. Cashiers only get the register,
-// transactions, credit accounts and the scan lookup; everything else is
-// owner-only (pages also check this themselves via rbac.ts).
-const CASHIER_ALLOWED_PREFIXES = ["/pos", "/sales", "/customers", "/api/scan"];
+// transactions, credit accounts, the scan lookup and product photos;
+// everything else is owner-only (pages also check this via rbac.ts).
+const CASHIER_ALLOWED_PREFIXES = ["/pos", "/sales", "/customers", "/api/scan", "/api/products"];
 // Owner-only pages inside an allowed section.
 const CASHIER_BLOCKED = ["/customers/new"];
 
