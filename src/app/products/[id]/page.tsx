@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireOwnerOrRedirect } from "@/lib/rbac";
 import { getPriceHistory, getProduct, listCategories } from "@/lib/queries";
 import { formatCurrency, formatDateTime } from "@/lib/format";
-import { Card, PageHeader, Table } from "@/components/ui";
+import { Card, CardHeader, PageHeader, Table } from "@/components/ui";
 import ProductForm from "@/components/ProductForm";
 
 export default async function ProductPage({ params }: PageProps<"/products/[id]">) {
@@ -14,17 +14,21 @@ export default async function ProductPage({ params }: PageProps<"/products/[id]"
 
   return (
     <>
-      <PageHeader title={product.name} subtitle={`Current SRP ${formatCurrency(product.srp)}`} />
+      <PageHeader
+        title={product.name}
+        subtitle={`Current SRP: ${formatCurrency(product.srp)}`}
+        back={{ href: "/products", label: "Products" }}
+      />
       <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
         <Card className="p-6">
           <ProductForm product={product} categories={categories} />
         </Card>
         <Card>
-          <div className="border-b border-line px-4 py-3 font-semibold">SRP history</div>
+          <CardHeader title="SRP history" description="Every change to this product’s selling price." />
           <Table>
             <thead>
               <tr>
-                <th>When</th>
+                <th>Date</th>
                 <th className="text-right">Change</th>
               </tr>
             </thead>

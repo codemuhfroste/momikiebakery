@@ -12,14 +12,17 @@ const STOCK_REASONS = {
   correction: "Count correction",
 } as const;
 
-// Owner-only. `change` is signed: positive adds stock, negative removes.
+// Owner-only. Records a delivery, spoilage, or count correction.
 export async function adjustStockAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const session = await getSession();
   if (session?.role !== "owner") return { error: "Only the owner can adjust stock." };
 
   const productId = Number(fd.get("product_id"));
-  const change = Number(fd.get("change"));
   const reason = String(fd.get("reason") ?? "") as keyof typeof STOCK_REASONS;
+  // Deliveries always add and spoilage always removes, whatever sign was
+  // typed; only a count correction uses the sign as entered.
+  const typed = Number(fd.get("change"));
+  const change = reason === "restock" ? Math.abs(typed) : reason === "spoilage" ? -Math.abs(typed) : typed;
   const note = String(fd.get("note") ?? "").trim() || null;
   if (!Number.isFinite(change) || change === 0) return { error: "Enter a non-zero quantity." };
   if (!(reason in STOCK_REASONS)) return { error: "Pick a reason." };

@@ -12,7 +12,7 @@ export default async function ProductsPage() {
     <>
       <PageHeader
         title="Products"
-        subtitle="Catalog and SRP (suggested retail price). SRP changes are logged."
+        subtitle="Everything the store sells. SRP is the Suggested Retail Price — the normal selling price used at the register. Changes to an SRP are recorded in the Audit Log."
         actions={
           <Link href="/products/new" className={btnPrimary}>
             + Add product
@@ -21,7 +21,7 @@ export default async function ProductsPage() {
       />
       <Card>
         {products.length === 0 ? (
-          <EmptyState>No products yet.</EmptyState>
+          <EmptyState>No products yet. Use “Add product” to create the first one.</EmptyState>
         ) : (
           <Table>
             <thead>
@@ -30,8 +30,8 @@ export default async function ProductsPage() {
                 <th>Barcode</th>
                 <th>Category</th>
                 <th className="text-right">Cost</th>
-                <th className="text-right">SRP</th>
-                <th className="text-right">Margin</th>
+                <th className="text-right">SRP (selling price)</th>
+                <th className="text-right">Profit margin</th>
                 <th />
               </tr>
             </thead>
@@ -46,9 +46,9 @@ export default async function ProductsPage() {
                   </td>
                   <td className="font-mono text-xs">{p.barcode ?? "—"}</td>
                   <td>{p.category_name ?? "—"}</td>
-                  <td className="text-right">{formatCurrency(p.cost)}</td>
-                  <td className="text-right font-medium">{formatCurrency(p.srp)}</td>
-                  <td className="text-right text-muted">
+                  <td className="text-right tabular-nums">{formatCurrency(p.cost)}</td>
+                  <td className="text-right font-medium tabular-nums">{formatCurrency(p.srp)}</td>
+                  <td className="text-right tabular-nums text-muted">
                     {p.srp > 0 ? `${(((p.srp - p.cost) / p.srp) * 100).toFixed(0)}%` : "—"}
                   </td>
                   <td className="text-right">{!p.is_active && <Badge>Inactive</Badge>}</td>

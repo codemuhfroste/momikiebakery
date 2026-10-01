@@ -9,7 +9,11 @@ export default async function NewProductPage({ searchParams }: PageProps<"/produ
   const categories = await listCategories();
   return (
     <>
-      <PageHeader title="Add product" />
+      <PageHeader
+        title="Add product"
+        subtitle="To link a barcode, click the Barcode box and scan the product."
+        back={{ href: "/products", label: "Products" }}
+      />
       <Card className="max-w-2xl p-6">
         <ProductForm categories={categories} defaultBarcode={typeof barcode === "string" ? barcode : undefined} />
       </Card>

@@ -8,7 +8,7 @@ export default async function ScannerPage() {
     <>
       <PageHeader
         title="Scanner Check"
-        subtitle="Test a barcode scanner: scan an item and see whether the system recognises it."
+        subtitle="Use this page to test a barcode scanner. Scan any item; the result shows whether the system recognises it."
       />
       <ScannerCheck />
     </>

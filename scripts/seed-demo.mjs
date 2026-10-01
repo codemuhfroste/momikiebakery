@@ -54,4 +54,19 @@ for (const [index, [sku, name, category, srp, cost, stock, reorder]] of products
   });
 }
 
-console.log(`Demo data loaded: ${categories.length} categories, ${products.length} products.`);
+// [name, mobile, credit limit (null = no limit)]
+const customers = [
+  ["Aling Nena Santos", "0917 123 4567", 1000],
+  ["Mang Jose Reyes", "0918 765 4321", null],
+];
+for (const [name, phone, limit] of customers) {
+  await db.execute({
+    sql: `INSERT INTO customers (name, phone, credit_limit)
+          SELECT ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM customers WHERE name = ?)`,
+    args: [name, phone, limit, name],
+  });
+}
+
+console.log(
+  `Demo data loaded: ${categories.length} categories, ${products.length} products, ${customers.length} credit customers.`
+);

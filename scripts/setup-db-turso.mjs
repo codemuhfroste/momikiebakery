@@ -47,6 +47,18 @@ const statements = [
     created_at TEXT NOT NULL DEFAULT ${NOW}
   )`,
   `CREATE INDEX IF NOT EXISTS idx_price_history_product ON price_history(product_id)`,
+  // Customers who can buy on credit ("utang"). credit_limit NULL = no limit.
+  `CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT,
+    address TEXT,
+    credit_limit REAL,
+    notes TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT ${NOW},
+    updated_at TEXT NOT NULL DEFAULT ${NOW}
+  )`,
   // One row per completed checkout. `receipt_no` is assigned once at sale
   // time. A voided sale keeps its row (voided_at set) so the audit trail and
   // receipt numbering stay intact.
@@ -62,7 +74,9 @@ const statements = [
     created_at TEXT NOT NULL DEFAULT ${NOW},
     voided_at TEXT,
     voided_by TEXT,
-    void_reason TEXT
+    void_reason TEXT,
+    customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+    credit_amount REAL NOT NULL DEFAULT 0
   )`,
   `CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at)`,
   // name/srp/unit_price/unit_cost are snapshots so old receipts don't change
@@ -95,6 +109,35 @@ const statements = [
     created_at TEXT NOT NULL DEFAULT ${NOW}
   )`,
   `CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id)`,
+  // Credit account ledger. A customer's balance is SUM(amount):
+  //   charge  (+) part of a sale put on credit
+  //   payment (-) money the customer paid toward their balance
+  //   void    (-) reverses the charge of a voided sale
+  // Rows are never edited or deleted, so the history always adds up.
+  `CREATE TABLE IF NOT EXISTS credit_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    entry_type TEXT NOT NULL,
+    amount REAL NOT NULL,
+    sale_id INTEGER REFERENCES sales(id) ON DELETE SET NULL,
+    payment_method TEXT,
+    note TEXT,
+    actor_name TEXT,
+    created_at TEXT NOT NULL DEFAULT ${NOW}
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_credit_ledger_customer ON credit_ledger(customer_id)`,
+  // Which receipts each credit payment paid off. A payment can cover several
+  // receipts, and a receipt can be paid over several payments. A credit
+  // sale's outstanding amount = credit_amount - SUM(its allocations).
+  `CREATE TABLE IF NOT EXISTS credit_allocations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    payment_id INTEGER NOT NULL REFERENCES credit_ledger(id) ON DELETE CASCADE,
+    sale_id INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    amount REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT ${NOW}
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_credit_allocations_sale ON credit_allocations(sale_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_credit_allocations_payment ON credit_allocations(payment_id)`,
   `CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     actor_name TEXT,
@@ -116,6 +159,19 @@ const statements = [
 
 for (const statement of statements) {
   await db.execute(statement);
+}
+
+// Columns added after a table was first created. CREATE TABLE IF NOT EXISTS
+// won't add them to an existing table, so add each one unless it's there.
+const addedColumns = [
+  ["sales", "customer_id", "INTEGER REFERENCES customers(id) ON DELETE SET NULL"],
+  ["sales", "credit_amount", "REAL NOT NULL DEFAULT 0"],
+];
+for (const [table, column, type] of addedColumns) {
+  const { rows } = await db.execute(`PRAGMA table_info(${table})`);
+  if (!rows.some((r) => r.name === column)) {
+    await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
 }
 
 console.log("Turso schema is up to date.");

@@ -1,5 +1,9 @@
-export type PaymentMethod = "Cash" | "GCash" | "Maya" | "Card";
-export const PAYMENT_METHODS: PaymentMethod[] = ["Cash", "GCash", "Maya", "Card"];
+export type PaymentMethod = "Cash" | "GCash" | "Maya" | "Card" | "Credit";
+export const PAYMENT_METHODS: PaymentMethod[] = ["Cash", "GCash", "Maya", "Card", "Credit"];
+
+// Ways a customer can pay down a credit balance.
+export type CreditPaymentMethod = Exclude<PaymentMethod, "Credit">;
+export const CREDIT_PAYMENT_METHODS: CreditPaymentMethod[] = ["Cash", "GCash", "Maya", "Card"];
 
 export interface Category {
   id: number;
@@ -35,7 +39,61 @@ export interface Sale {
   voided_at: string | null;
   voided_by: string | null;
   void_reason: string | null;
+  customer_id: number | null;
+  credit_amount: number; // part of the total charged to the customer's account
 }
+
+// A customer who can buy on credit ("utang").
+export interface Customer {
+  id: number;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  credit_limit: number | null; // null = no limit
+  notes: string | null;
+  is_active: number; // 0/1
+  balance: number; // SUM of their credit_ledger rows
+  last_activity: string | null;
+}
+
+export type LedgerEntryType = "charge" | "payment" | "void";
+
+export interface LedgerEntry {
+  id: number;
+  customer_id: number;
+  entry_type: LedgerEntryType;
+  amount: number; // + increases what they owe, - decreases it
+  sale_id: number | null;
+  receipt_no: string | null;
+  payment_method: string | null;
+  note: string | null;
+  actor_name: string | null;
+  created_at: string;
+  applied_to: string | null; // payments: receipt numbers this payment paid, comma-separated
+}
+
+// A credit sale that still has something left to pay.
+export interface OpenCreditSale {
+  id: number;
+  receipt_no: string;
+  created_at: string;
+  credit_amount: number;
+  paid: number;
+  outstanding: number;
+}
+
+export type CreditPaymentStatus = "unpaid" | "partial" | "paid";
+
+export function creditPaymentStatus(creditAmount: number, paid: number): CreditPaymentStatus {
+  if (paid <= 0.004) return "unpaid";
+  return paid >= creditAmount - 0.004 ? "paid" : "partial";
+}
+
+export const CREDIT_STATUS_LABELS: Record<CreditPaymentStatus, { label: string; tone: "bad" | "warn" | "good" }> = {
+  unpaid: { label: "Unpaid", tone: "bad" },
+  partial: { label: "Partially paid", tone: "warn" },
+  paid: { label: "Paid", tone: "good" },
+};
 
 export interface SaleItem {
   id: number;
@@ -75,4 +133,13 @@ export function stockStatus(p: Pick<Product, "stock_qty" | "reorder_level">): St
   if (p.stock_qty <= 0) return "out";
   if (p.stock_qty <= p.reorder_level) return "low";
   return "ok";
+}
+
+export function accountStatus(
+  c: Pick<Customer, "is_active" | "credit_limit" | "balance">
+): { tone: "good" | "warn" | "bad" | "neutral"; label: string } {
+  if (!c.is_active) return { tone: "neutral", label: "Inactive" };
+  if (c.credit_limit != null && c.balance > c.credit_limit + 0.004) return { tone: "bad", label: "Over limit" };
+  if (c.balance > 0.004) return { tone: "warn", label: "Has balance" };
+  return { tone: "good", label: "Paid up" };
 }

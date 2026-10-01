@@ -21,6 +21,14 @@ export interface PosProduct {
   stock_qty: number;
 }
 
+export interface PosCustomer {
+  id: number;
+  name: string;
+  phone: string | null;
+  balance: number;
+  credit_limit: number | null;
+}
+
 interface CartLine {
   product: PosProduct;
   qty: number;
@@ -28,7 +36,21 @@ interface CartLine {
   barcode: string | null;
 }
 
-export default function PosClient({ products }: { products: PosProduct[] }) {
+const METHOD_LABELS: Record<PaymentMethod, string> = {
+  Cash: "Cash",
+  GCash: "GCash",
+  Maya: "Maya",
+  Card: "Card",
+  Credit: "Credit",
+};
+
+export default function PosClient({
+  products,
+  customers,
+}: {
+  products: PosProduct[];
+  customers: PosCustomer[];
+}) {
   const router = useRouter();
   const [cart, setCart] = useState<CartLine[]>([]);
   const [query, setQuery] = useState("");
@@ -36,6 +58,7 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
   const [discount, setDiscount] = useState(0);
   const [method, setMethod] = useState<PaymentMethod>("Cash");
   const [tendered, setTendered] = useState("");
+  const [customerId, setCustomerId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [unknownCode, setUnknownCode] = useState<string | null>(null);
@@ -90,7 +113,7 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
     } else if (/^\d+$/.test(q) && q.length >= MIN_BARCODE_LENGTH) {
       setUnknownCode(q);
     } else {
-      setNotice({ tone: "err", text: "Tap a product from the list." });
+      setNotice({ tone: "err", text: "Select a product from the list." });
     }
   }
   useBarcodeScanner(handleCode);
@@ -98,10 +121,26 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
   const subtotal = round2(cart.reduce((s, l) => s + l.unitPrice * l.qty, 0));
   const discountValue = Math.min(Math.max(discount || 0, 0), subtotal);
   const total = round2(subtotal - discountValue);
-  const tenderedValue = method === "Cash" ? Number(tendered) || 0 : total;
+  const isCredit = method === "Credit";
+  const cashIn = Number(tendered) || 0;
+  const tenderedValue = method === "Cash" || isCredit ? cashIn : total;
   const change = round2(tenderedValue - total);
-  const canPay = cart.length > 0 && tenderedValue >= total;
   const overrides = cart.filter((l) => Math.abs(l.unitPrice - l.product.srp) > 0.004).length;
+
+  const customer = customers.find((c) => c.id === customerId) ?? null;
+  const creditAmount = isCredit ? round2(total - cashIn) : 0;
+  const available = customer?.credit_limit == null ? null : round2(customer.credit_limit - customer.balance);
+  const overLimit = isCredit && available != null && creditAmount > available + 0.004;
+
+  const canPay =
+    cart.length > 0 &&
+    (isCredit ? customer != null && cashIn < total && !overLimit : tenderedValue >= total);
+
+  function selectMethod(m: PaymentMethod) {
+    setMethod(m);
+    setTendered("");
+    setError(null);
+  }
 
   function updateLine(id: number, patch: Partial<CartLine>) {
     setCart((prev) => prev.map((l) => (l.product.id === id ? { ...l, ...patch } : l)));
@@ -120,6 +159,7 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
         discount: discountValue,
         paymentMethod: method,
         amountTendered: tenderedValue,
+        customerId: isCredit ? customerId : null,
       });
       if ("error" in result) setError(result.error);
       else router.push(`/sales/${result.saleId}?new=1`);
@@ -127,11 +167,15 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
+    <div className="grid gap-6 lg:grid-cols-[1fr_25rem]">
       {/* Product picker */}
       <section className="min-w-0">
         <div className="mb-4">
+          <label className={labelCls} htmlFor="pos-search">
+            Find a product
+          </label>
           <input
+            id="pos-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -140,16 +184,14 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
                 handleSearchEnter();
               }
             }}
-            placeholder="Search by name, or scan a barcode…"
+            placeholder="Type a product name, or scan its barcode"
             autoFocus
             ref={searchRef}
-            className={`${inputCls} py-3 text-base`}
+            className={`${inputCls} py-2.5 text-base`}
           />
-          <div className="mt-2 h-5 text-sm">
+          <div className="mt-1.5 h-5 text-sm">
             {notice && (
-              <span className={notice.tone === "ok" ? "text-emerald-700" : "text-red-600"}>
-                {notice.text}
-              </span>
+              <span className={notice.tone === "ok" ? "text-emerald-700" : "text-red-600"}>{notice.text}</span>
             )}
           </div>
         </div>
@@ -162,14 +204,14 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
                 type="button"
                 disabled={out}
                 onClick={() => addProduct(p)}
-                className="flex flex-col rounded-2xl border border-line bg-surface p-3 text-left shadow-sm transition hover:border-brand hover:shadow disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex flex-col rounded-lg border border-line bg-surface p-3 text-left shadow-sm transition hover:border-brand hover:ring-1 hover:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="text-xs text-muted">{p.category_name ?? "Uncategorized"}</span>
                 <span className="mt-0.5 line-clamp-2 min-h-10 text-sm font-medium text-ink">{p.name}</span>
                 <span className="mt-2 flex items-center justify-between">
-                  <span className="font-semibold text-brand">{formatCurrency(p.srp)}</span>
-                  <span className={`text-xs ${out ? "text-red-600" : "text-muted"}`}>
-                    {out ? "Out" : `${formatQty(p.stock_qty)} left`}
+                  <span className="font-semibold tabular-nums text-ink">{formatCurrency(p.srp)}</span>
+                  <span className={`text-xs ${out ? "font-medium text-red-600" : "text-muted"}`}>
+                    {out ? "Out of stock" : `${formatQty(p.stock_qty)} in stock`}
                   </span>
                 </span>
               </button>
@@ -181,20 +223,22 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
         </div>
       </section>
 
-      {/* Cart */}
-      <aside className="flex h-fit flex-col rounded-2xl border border-line bg-surface shadow-sm lg:sticky lg:top-8">
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="font-semibold text-ink">Current sale</h2>
+      {/* Order summary */}
+      <aside className="flex h-fit flex-col rounded-lg border border-line bg-surface shadow-sm lg:sticky lg:top-6">
+        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+          <h2 className="text-sm font-semibold text-ink">
+            Current sale{cart.length > 0 && <span className="font-normal text-muted"> · {cart.length} item(s)</span>}
+          </h2>
           {cart.length > 0 && (
             <button type="button" onClick={() => setCart([])} className="text-sm text-muted hover:text-red-600">
-              Clear
+              Clear all
             </button>
           )}
         </div>
 
-        <div className="max-h-[42vh] divide-y divide-line overflow-y-auto">
+        <div className="max-h-[36vh] divide-y divide-line overflow-y-auto">
           {cart.length === 0 && (
-            <p className="px-5 py-10 text-center text-sm text-muted">Scan or tap an item to begin.</p>
+            <p className="px-5 py-10 text-center text-sm text-muted">Scan or select a product to start a sale.</p>
           )}
           {cart.map((l) => {
             const changed = Math.abs(l.unitPrice - l.product.srp) > 0.004;
@@ -206,52 +250,57 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
                     type="button"
                     aria-label={`Remove ${l.product.name}`}
                     onClick={() => setCart((prev) => prev.filter((x) => x !== l))}
-                    className="text-muted hover:text-red-600"
+                    className="text-xs text-muted hover:text-red-600"
                   >
-                    ×
+                    Remove
                   </button>
                 </div>
                 <div className="mt-2 flex items-center gap-2">
-                  <div className="flex items-center rounded-lg border border-line">
+                  <div className="flex items-center rounded-md border border-line">
                     <button
                       type="button"
-                      className="px-2 py-1 text-muted hover:text-ink"
+                      aria-label="Decrease quantity"
+                      className="px-2.5 py-1 text-muted hover:text-ink"
                       onClick={() => updateLine(l.product.id, { qty: Math.max(1, l.qty - 1) })}
                     >
                       −
                     </button>
-                    <span className="w-8 text-center text-sm">{formatQty(l.qty)}</span>
+                    <span className="w-8 text-center text-sm tabular-nums">{formatQty(l.qty)}</span>
                     <button
                       type="button"
-                      className="px-2 py-1 text-muted hover:text-ink"
+                      aria-label="Increase quantity"
+                      className="px-2.5 py-1 text-muted hover:text-ink"
                       onClick={() => updateLine(l.product.id, { qty: Math.min(l.product.stock_qty, l.qty + 1) })}
                     >
                       +
                     </button>
                   </div>
-                  <span className="text-muted">×</span>
+                  <span className="text-xs text-muted">at ₱</span>
                   <input
                     type="number"
                     min={0}
                     step="0.01"
+                    aria-label="Unit price"
                     value={l.unitPrice}
                     onChange={(e) => updateLine(l.product.id, { unitPrice: Number(e.target.value) })}
-                    className={`w-24 rounded-lg border px-2 py-1 text-sm ${
+                    className={`w-20 rounded-md border px-2 py-1 text-sm tabular-nums ${
                       changed ? "border-amber-400 bg-amber-50" : "border-line"
                     }`}
                   />
-                  <span className="ml-auto text-sm font-semibold">{formatCurrency(l.unitPrice * l.qty)}</span>
+                  <span className="ml-auto text-sm font-semibold tabular-nums">
+                    {formatCurrency(l.unitPrice * l.qty)}
+                  </span>
                 </div>
                 {changed && (
-                  <div className="mt-1.5 flex items-center gap-2 text-xs text-amber-700">
-                    <Badge tone="warn">Price override</Badge>
-                    SRP {formatCurrency(l.product.srp)} ·{" "}
+                  <div className="mt-1.5 flex items-center gap-2 text-xs text-amber-800">
+                    <Badge tone="warn">Not SRP</Badge>
+                    SRP is {formatCurrency(l.product.srp)}.
                     <button
                       type="button"
                       className="underline"
                       onClick={() => updateLine(l.product.id, { unitPrice: l.product.srp })}
                     >
-                      reset
+                      Use SRP
                     </button>
                   </div>
                 )}
@@ -262,14 +311,14 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
 
         <div className="space-y-3 border-t border-line px-5 py-4">
           {overrides > 0 && (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              {overrides} line{overrides > 1 ? "s are" : " is"} priced differently from SRP. This will be
-              recorded in the audit log.
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {overrides} item{overrides > 1 ? "s are" : " is"} priced differently from the SRP. This will be
+              recorded in the Audit Log.
             </p>
           )}
           <div className="flex justify-between text-sm">
             <span className="text-muted">Subtotal</span>
-            <span>{formatCurrency(subtotal)}</span>
+            <span className="tabular-nums">{formatCurrency(subtotal)}</span>
           </div>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="text-muted">Discount (₱)</span>
@@ -278,30 +327,31 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
               min={0}
               step="0.01"
               value={discount || ""}
+              placeholder="0.00"
               onChange={(e) => setDiscount(Number(e.target.value))}
-              className="w-28 rounded-lg border border-line px-2 py-1 text-right text-sm"
+              className="w-28 rounded-md border border-line px-2 py-1 text-right text-sm tabular-nums"
             />
           </div>
-          <div className="flex justify-between text-xl font-semibold text-ink">
+          <div className="flex justify-between border-t border-line pt-3 text-xl font-semibold text-ink">
             <span>Total</span>
-            <span>{formatCurrency(total)}</span>
+            <span className="tabular-nums">{formatCurrency(total)}</span>
           </div>
 
           <div>
-            <span className={labelCls}>Payment</span>
-            <div className="grid grid-cols-4 gap-1.5">
+            <span className={labelCls}>Payment method</span>
+            <div className="grid grid-cols-5 gap-1.5">
               {PAYMENT_METHODS.map((m) => (
                 <button
                   key={m}
                   type="button"
-                  onClick={() => setMethod(m)}
-                  className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+                  onClick={() => selectMethod(m)}
+                  className={`rounded-md border px-1 py-1.5 text-xs font-medium transition ${
                     method === m
                       ? "border-brand bg-brand text-white"
-                      : "border-line bg-white text-ink hover:bg-brand-soft"
+                      : "border-line bg-white text-ink hover:bg-slate-50"
                   }`}
                 >
-                  {m}
+                  {METHOD_LABELS[m]}
                 </button>
               ))}
             </div>
@@ -310,7 +360,7 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
           {method === "Cash" && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Tendered</label>
+                <label className={labelCls}>Cash received</label>
                 <input
                   type="number"
                   min={0}
@@ -322,21 +372,44 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
               </div>
               <div>
                 <span className={labelCls}>Change</span>
-                <div className={`py-2 text-lg font-semibold ${change < 0 ? "text-red-600" : "text-emerald-700"}`}>
+                <div className={`py-2 text-lg font-semibold tabular-nums ${change < 0 ? "text-red-600" : "text-emerald-700"}`}>
                   {formatCurrency(Math.max(change, 0))}
                 </div>
               </div>
             </div>
           )}
 
+          {isCredit && (
+            <CreditPanel
+              customers={customers}
+              customer={customer}
+              onSelect={setCustomerId}
+              downPayment={tendered}
+              onDownPayment={setTendered}
+              creditAmount={creditAmount}
+              available={available}
+              overLimit={overLimit}
+              total={total}
+            />
+          )}
+
           {error && <p className="text-sm text-red-600">{error}</p>}
 
-          <button type="button" disabled={!canPay || pending} onClick={checkout} className={`${btnPrimary} w-full py-3 text-base`}>
-            {pending ? "Processing…" : `Charge ${formatCurrency(total)}`}
+          <button
+            type="button"
+            disabled={!canPay || pending}
+            onClick={checkout}
+            className={`${btnPrimary} w-full py-3 text-base`}
+          >
+            {pending
+              ? "Processing…"
+              : isCredit
+                ? `Charge ${formatCurrency(Math.max(creditAmount, 0))} to account`
+                : `Complete sale · ${formatCurrency(total)}`}
           </button>
           {method === "Cash" && (
             <button type="button" className={`${btnSecondary} w-full`} onClick={() => setTendered(String(total))}>
-              Exact amount
+              Exact amount received
             </button>
           )}
         </div>
@@ -355,6 +428,115 @@ export default function PosClient({ products }: { products: PosProduct[] }) {
             router.refresh();
           }}
         />
+      )}
+    </div>
+  );
+}
+
+function CreditPanel({
+  customers,
+  customer,
+  onSelect,
+  downPayment,
+  onDownPayment,
+  creditAmount,
+  available,
+  overLimit,
+  total,
+}: {
+  customers: PosCustomer[];
+  customer: PosCustomer | null;
+  onSelect: (id: number | null) => void;
+  downPayment: string;
+  onDownPayment: (v: string) => void;
+  creditAmount: number;
+  available: number | null;
+  overLimit: boolean;
+  total: number;
+}) {
+  const [search, setSearch] = useState("");
+  const s = search.trim().toLowerCase();
+  const matches = customers
+    .filter((c) => !s || c.name.toLowerCase().includes(s) || c.phone?.includes(s))
+    .slice(0, 6);
+
+  if (customers.length === 0) {
+    return (
+      <p className="rounded-md border border-line bg-slate-50 px-3 py-2 text-sm text-muted">
+        No credit customers yet.{" "}
+        <Link href="/customers/new" className="text-brand underline">
+          Add one
+        </Link>{" "}
+        first.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border border-line bg-slate-50 p-3">
+      {customer ? (
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="text-sm font-semibold text-ink">{customer.name}</div>
+            <div className="text-xs text-muted">
+              Owes {formatCurrency(customer.balance)} ·{" "}
+              {available == null ? "no credit limit" : `${formatCurrency(Math.max(available, 0))} available`}
+            </div>
+          </div>
+          <button type="button" className="text-xs text-brand underline" onClick={() => onSelect(null)}>
+            Change
+          </button>
+        </div>
+      ) : (
+        <div>
+          <label className={labelCls}>Customer</label>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search customer name or mobile"
+            className={inputCls}
+          />
+          <ul className="mt-1.5 max-h-40 divide-y divide-line overflow-y-auto rounded-md border border-line bg-white">
+            {matches.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(c.id)}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-brand-soft"
+                >
+                  <span>{c.name}</span>
+                  <span className="text-xs tabular-nums text-muted">owes {formatCurrency(c.balance)}</span>
+                </button>
+              </li>
+            ))}
+            {matches.length === 0 && <li className="px-3 py-2 text-sm text-muted">No match.</li>}
+          </ul>
+        </div>
+      )}
+
+      <div>
+        <label className={labelCls}>Down payment (optional)</label>
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={downPayment}
+          placeholder="0.00"
+          onChange={(e) => onDownPayment(e.target.value)}
+          className={inputCls}
+        />
+      </div>
+      <div className="flex justify-between text-sm">
+        <span className="text-muted">Added to their balance</span>
+        <span className="font-semibold tabular-nums">{formatCurrency(Math.max(creditAmount, 0))}</span>
+      </div>
+      {(Number(downPayment) || 0) >= total && total > 0 && (
+        <p className="text-xs text-red-600">The down payment covers the whole total — use Cash instead.</p>
+      )}
+      {overLimit && customer && (
+        <p className="text-xs text-red-600">
+          This would put {customer.name} over their credit limit. Collect a larger down payment or remove items.
+        </p>
       )}
     </div>
   );
@@ -391,12 +573,12 @@ function UnknownBarcodeModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+      <div className="w-full max-w-md rounded-lg bg-surface p-6 shadow-xl">
         <h2 className="text-lg font-semibold">Barcode not registered</h2>
         <p className="mt-1 text-sm text-muted">
-          <span className="font-mono text-ink">{code}</span> isn&apos;t linked to a product yet. Link it to an
-          existing product, or add a new one.
+          The barcode <span className="font-mono text-ink">{code}</span> is not linked to any product. Link it to
+          an existing product, or add it as a new product.
         </p>
         <input
           autoFocus
@@ -405,7 +587,7 @@ function UnknownBarcodeModal({
           placeholder="Search product to link…"
           className={`${inputCls} mt-4`}
         />
-        <ul className="mt-2 max-h-56 divide-y divide-line overflow-y-auto rounded-lg border border-line">
+        <ul className="mt-2 max-h-56 divide-y divide-line overflow-y-auto rounded-md border border-line">
           {matches.map((p) => (
             <li key={p.id}>
               <button
@@ -415,7 +597,7 @@ function UnknownBarcodeModal({
                 className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-brand-soft disabled:opacity-50"
               >
                 <span>{p.name}</span>
-                <span className="text-xs text-muted">{p.barcode ? "has barcode" : "no barcode"}</span>
+                <span className="text-xs text-muted">{p.barcode ? "has a barcode" : "no barcode yet"}</span>
               </button>
             </li>
           ))}

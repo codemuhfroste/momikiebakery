@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { createProductAction, updateProductAction } from "@/app/products/actions";
 import type { Category, Product } from "@/lib/types";
-import { btnPrimary, inputCls, labelCls } from "./ui";
+import { btnPrimary, hintCls, inputCls, labelCls } from "./ui";
 
 export default function ProductForm({
   product,
@@ -24,7 +24,7 @@ export default function ProductForm({
       {product && <input type="hidden" name="id" value={product.id} />}
 
       <div className="sm:col-span-2">
-        <label className={labelCls}>Name</label>
+        <label className={labelCls}>Product name</label>
         <input name="name" required defaultValue={product?.name} className={inputCls} />
       </div>
       <div>
@@ -36,9 +36,10 @@ export default function ProductForm({
           onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
           className={inputCls}
         />
+        <p className={hintCls}>Click here and scan the product, or leave blank.</p>
       </div>
       <div>
-        <label className={labelCls}>SKU</label>
+        <label className={labelCls}>SKU / item code (optional)</label>
         <input name="sku" defaultValue={product?.sku ?? ""} className={inputCls} />
       </div>
       <div>
@@ -54,23 +55,24 @@ export default function ProductForm({
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={labelCls}>SRP (₱)</label>
+          <label className={labelCls}>SRP — selling price (₱)</label>
           <input name="srp" type="number" step="0.01" min={0} required defaultValue={product?.srp} className={inputCls} />
         </div>
         <div>
-          <label className={labelCls}>Cost (₱)</label>
+          <label className={labelCls}>Cost per item (₱)</label>
           <input name="cost" type="number" step="0.01" min={0} defaultValue={product?.cost ?? 0} className={inputCls} />
         </div>
       </div>
       {!product && (
         <div>
-          <label className={labelCls}>Opening stock</label>
+          <label className={labelCls}>Quantity on hand</label>
           <input name="stock_qty" type="number" step="any" min={0} defaultValue={0} className={inputCls} />
         </div>
       )}
       <div>
         <label className={labelCls}>Reorder level</label>
         <input name="reorder_level" type="number" step="any" min={0} defaultValue={product?.reorder_level ?? 0} className={inputCls} />
+        <p className={hintCls}>Marked “Low stock” when the quantity falls to this number.</p>
       </div>
       {product && (
         <label className="flex items-center gap-2 self-end pb-2 text-sm">

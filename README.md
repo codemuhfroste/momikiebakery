@@ -9,8 +9,18 @@ after the Gemellus Cashflow repo.
 
 ## Features
 
-- **Register** (`/pos`) — product grid + search, cart, discount, Cash/GCash/Maya/Card,
+- **Register** (`/pos`) — product grid + search, cart, discount, Cash/GCash/Maya/Card/Credit,
   change calculation, printable receipt. Prices default to the product's **SRP**.
+- **Credit Accounts** (`/customers`) — customers who buy now and pay later (utang).
+  Pick **Credit** at the register, choose the customer, optionally take a down
+  payment; the rest is added to their balance. Optional per-customer credit limit
+  (enforced at checkout). Each account has a statement (purchases, payments,
+  voids, running balance) and a "Record payment" form. Payments are applied to
+  the receipts you tick (oldest first for partial payments), so every credit
+  receipt shows Unpaid / Partially paid / Paid. Voiding an unpaid credit sale
+  reverses its charge; one with payments on it can't be voided. Balances are the
+  sum of an append-only `credit_ledger`; `credit_allocations` records which
+  receipts each payment covered.
 - **Price control against SRP** — a cashier can change a line's price, but the
   line is flagged "Price override", stored with the SRP at the time of sale, and
   written to the audit log (`price.override`). Owner SRP edits are logged too
@@ -20,8 +30,8 @@ after the Gemellus Cashflow repo.
 - **Inventory** (`/inventory`) — stock levels with low/out status, restock,
   spoilage and count corrections; every change is a stock movement.
 - **Products** (`/products`) — catalog with barcode, SKU, cost, SRP, margin.
-- **Audit Log** (`/audit-log`) — filter by price changes, sales & voids, stock,
-  sign-ins.
+- **Audit Log** (`/audit-log`) — filter by price changes, sales & voids, credit,
+  stock, sign-ins.
 
 ## Barcode scanning
 
@@ -41,7 +51,7 @@ The PIN/role code in `src/lib/auth.ts` is kept for when login comes back.
 ```bash
 cp .env.example .env.local   # optional — auth is off, so no PINs needed
 npm install
-npm run db:setup             # creates data/momikie.db
+npm run db:setup             # creates/updates data/momikie.db (safe to re-run)
 npm run seed:demo -- --yes   # optional sample products
 npm run dev
 ```
@@ -51,6 +61,6 @@ Open http://localhost:3000. The database is the file `data/momikie.db`
 
 ## Layout
 
-- `src/app/` — routes (`pos`, `sales`, `products`, `inventory`, `audit-log`)
-- `src/lib/` — `db.ts` (SQL tag), `auth.ts`/`rbac.ts`, `audit.ts`, `queries.ts`, `barcode.ts`, `format.ts`, `types.ts`
+- `src/app/` — routes (`pos`, `sales`, `customers`, `products`, `inventory`, `audit-log`, `scanner`)
+- `src/lib/` — `checkout.ts` (sales/voids) and `credit.ts` (customer accounts) hold the business logic; `db.ts` (SQL tag), `auth.ts`/`rbac.ts`, `audit.ts`, `queries.ts`, `barcode.ts`, `format.ts`, `types.ts`
 - `scripts/` — `setup-db-turso.mjs` (schema), `seed-demo.mjs`

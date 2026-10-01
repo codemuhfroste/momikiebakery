@@ -1,18 +1,21 @@
 @import "tailwindcss";
 
-/* Warm bakery palette: cream page, terracotta brand, deep-brown sidebar. */
+/* Formal palette: cool slate page, white surfaces, navy for primary actions
+   and the sidebar, gold used sparingly as an accent. Exposed to Tailwind as
+   bg-brand, text-ink, border-line, etc. via @theme below. Status colours
+   (green/amber/red) come straight from Tailwind's palette. */
 :root {
-  --background: #faf6ef;
+  --background: #f3f5f9;
   --surface: #ffffff;
-  --foreground: #2b1d14;
-  --ink: #2b1d14;
-  --muted: #7c6a5c;
-  --line: #eadfce;
-  --brand: #c2571a;
-  --brand-dark: #9f4514;
-  --brand-soft: #fdf0e3;
-  --accent: #f5b942;
-  --sidebar: #3a2416;
+  --foreground: #0f172a;
+  --ink: #0f172a;
+  --muted: #5b6577;
+  --line: #e1e6ee;
+  --brand: #1d3a8a;
+  --brand-dark: #152c6b;
+  --brand-soft: #eef2fb;
+  --accent: #d4a62a;
+  --sidebar: #0f1d3d;
 }
 
 @theme inline {
@@ -37,7 +40,7 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
-/* Receipts print on their own, without the sidebar. */
+/* Receipts print on their own, without the sidebar or top bar. */
 @media print {
   body {
     background: white;

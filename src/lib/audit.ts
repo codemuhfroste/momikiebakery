@@ -11,12 +11,15 @@ export interface AuditLogEntry {
 }
 
 // Action names are "area.verb". `price.*` covers both SRP changes
-// (price.srp_change) and prices overridden at the register (price.override).
-export type AuditFilter = "all" | "price" | "sales" | "stock" | "auth";
+// (price.srp_change) and prices overridden at the register (price.override);
+// `credit.*` covers charges, payments, voids and limit changes on customer
+// accounts.
+export type AuditFilter = "all" | "price" | "sales" | "credit" | "stock" | "auth";
 
 const FILTER_PREFIXES: Record<Exclude<AuditFilter, "all">, string[]> = {
   price: ["price.", "product.cost_change"],
   sales: ["sale."],
+  credit: ["credit.", "customer."],
   stock: ["stock."],
   auth: ["auth."],
 };
