@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifySessionToken, type SessionPayload } from "./auth";
+import { readBatch, stmt } from "./db";
 
 // The mobile app has no cookie jar shared with the browser, so it carries the
 // same signed session token as a Bearer header instead.
@@ -35,5 +36,13 @@ export async function withMobileSession(
 ): Promise<NextResponse> {
   const session = await getBearerSession(request);
   if (!session) return json({ error: "Please sign in again." }, 401);
+  // A phone stays signed in for a week, so a staff member the owner has
+  // deactivated is refused here straight away rather than when it expires.
+  if (session.role === "cashier") {
+    const [[staff]] = await readBatch<[{ is_active: number }[]]>([
+      stmt`SELECT is_active FROM staff WHERE name = ${session.name}`,
+    ]);
+    if (staff && !staff.is_active) return json({ error: "This staff account has been deactivated. Please sign in again." }, 401);
+  }
   return handler(session);
 }

@@ -18,7 +18,9 @@ database credentials.
 ## Offline mode
 
 1. Signing in the first time needs internet. After that the app opens and
-   sells with no connection.
+   sells with no connection. The phone stays signed in for 7 days (the website:
+   12 hours); deactivating a staff member on the Staff page cuts their phone off
+   at once. Don't sign out during a blackout — signing in again needs internet.
 2. Every sale and payment is saved on the phone first (the outbox), with a
    random id, and applied to the phone's copy of stock and balances at once.
 3. When there's a connection — on start, when Wi-Fi/data returns, every

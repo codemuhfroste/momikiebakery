@@ -7,7 +7,11 @@ export interface SessionPayload {
 }
 
 const SESSION_COOKIE = "momikie_session";
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours — one shift
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours — one shift (website)
+// The mobile app must keep working through long blackouts without anyone
+// re-entering a PIN, so its sign-in lasts a week. Deactivating a staff member
+// still cuts it off at once (see withMobileSession in mobileAuth.ts).
+const MOBILE_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // No hardcoded fallback in production: with a guessable secret anyone could
 // sign their own owner session. Local `next dev` gets a throwaway one.
@@ -95,8 +99,8 @@ async function sign(payload: string): Promise<string> {
   return toBase64Url(sig);
 }
 
-export async function createSessionToken(role: Role, name: string): Promise<string> {
-  const payload: SessionPayload = { role, name, exp: Date.now() + SESSION_TTL_MS };
+export async function createSessionToken(role: Role, name: string, ttlMs = SESSION_TTL_MS): Promise<string> {
+  const payload: SessionPayload = { role, name, exp: Date.now() + ttlMs };
   const payloadB64 = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
   return `${payloadB64}.${await sign(payloadB64)}`;
 }
@@ -123,4 +127,4 @@ export async function verifySessionToken(
   }
 }
 
-export { SESSION_COOKIE, SESSION_TTL_MS };
+export { SESSION_COOKIE, SESSION_TTL_MS, MOBILE_SESSION_TTL_MS };

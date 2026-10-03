@@ -1,4 +1,4 @@
-import { createSessionToken, isLoginRole } from "@/lib/auth";
+import { MOBILE_SESSION_TTL_MS, createSessionToken, isLoginRole } from "@/lib/auth";
 import { authenticate } from "@/lib/staff";
 import { logAudit } from "@/lib/audit";
 import { isLoginLocked, recordLoginResult } from "@/lib/loginThrottle";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   await recordLoginResult(result !== null);
   if (!result) return json({ error: "That PIN isn't right." }, 401);
 
-  const token = await createSessionToken(result.role, result.name);
+  const token = await createSessionToken(result.role, result.name, MOBILE_SESSION_TTL_MS);
   await logAudit({
     actorName: result.name,
     actorRole: result.role,
