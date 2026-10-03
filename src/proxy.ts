@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { STAFF_SEES_OWNER_TABS } from "@/lib/demo";
+import { getBearerSession } from "@/lib/mobileAuth";
 
 // Signed-out visitors go to /login. Cashiers only get the register,
 // transactions, credit accounts, the scan lookup and product photos;
@@ -10,7 +11,13 @@ const CASHIER_ALLOWED_PREFIXES = ["/pos", "/sales", "/customers", "/api/scan", "
 const CASHIER_BLOCKED = ["/customers/new"];
 
 export async function proxy(request: NextRequest) {
-  const session = await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
+  // Browsers ask permission (an OPTIONS "preflight") before sending the app's
+  // Bearer header; that request carries no credentials by design.
+  if (request.method === "OPTIONS") return NextResponse.next();
+  // The website uses the session cookie; the mobile app sends the same
+  // signed token as a Bearer header (e.g. when loading product photos).
+  const session =
+    (await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value)) ?? (await getBearerSession(request));
   if (!session) return NextResponse.redirect(new URL("/login", request.url));
 
   if (session.role === "cashier") {
@@ -31,5 +38,7 @@ export const config = {
   // ending in a file extension, e.g. /newbgmomikie.mp4) so the login page's video
   // loads for signed-out visitors. The dot is written as [.] — a bare "."
   // would match any character and skip the guard on every page.
-  matcher: ["/((?!login|owner|_next/static|_next/image|favicon.ico|.*[.][A-Za-z0-9]+$).*)"],
+  // /api/mobile/* is skipped too: those routes check the app's Bearer token
+  // themselves (lib/mobileAuth.ts) and answer cross-origin preflights.
+  matcher: ["/((?!login|owner|api/mobile|_next/static|_next/image|favicon.ico|.*[.][A-Za-z0-9]+$).*)"],
 };

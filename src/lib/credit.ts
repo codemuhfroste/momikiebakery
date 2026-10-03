@@ -1,10 +1,10 @@
 // Customer and credit-account logic, kept free of Next.js request APIs (see
 // checkout.ts). The server actions in src/app/customers/actions.ts wrap these.
-import { GUARD_CHANGED, isGuardFailure, readBatch, runBatch, stmt, type Statement } from "./db";
+import { GUARD_CHANGED, isGuardFailure, isUniqueFailure, readBatch, runBatch, stmt, type Statement } from "./db";
 import { openCreditSalesStmt } from "./queries";
 import { auditStmt } from "./audit";
 import { formatCurrency, round2 } from "./format";
-import type { Actor } from "./checkout";
+import { clampRecordedAt, type Actor } from "./checkout";
 import { CREDIT_PAYMENT_METHODS, type CreditPaymentMethod, type Customer, type OpenCreditSale } from "./types";
 
 export interface CustomerInput {
@@ -110,20 +110,28 @@ export async function recordCreditPayment(
   amount: number,
   method: CreditPaymentMethod,
   saleIds: number[],
-  note?: string | null
-): Promise<{ error?: string; ok?: string }> {
+  note?: string | null,
+  // Payments taken on the mobile app (possibly offline) and sent later. With
+  // no receipts chosen they apply to all of the customer's unpaid receipts,
+  // oldest first; re-sending the same clientUuid records it only once.
+  offline?: { clientUuid: string; recordedAt: string }
+): Promise<{ error?: string; ok?: string; duplicate?: boolean }> {
   amount = round2(Number(amount));
   if (!(amount > 0)) return { error: "Enter an amount greater than zero." };
   if (!CREDIT_PAYMENT_METHODS.includes(method)) return { error: "Choose how they paid." };
-  const ids = [...new Set(saleIds.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
-  if (ids.length === 0) return { error: "Select the receipt(s) being paid." };
+  let ids = [...new Set(saleIds.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  if (ids.length === 0 && !offline) return { error: "Select the receipt(s) being paid." };
 
-  const [[customer], openRows] = await readBatch<[Customer[], OpenCreditSale[]]>([
+  const [[customer], openRows, [already]] = await readBatch<[Customer[], OpenCreditSale[], { id: number }[]]>([
     stmt`SELECT c.*, COALESCE((SELECT SUM(amount) FROM credit_ledger l WHERE l.customer_id = c.id), 0) AS balance
          FROM customers c WHERE c.id = ${customerId}`,
     openCreditSalesStmt(customerId),
+    stmt`SELECT id FROM credit_ledger WHERE client_uuid = ${offline?.clientUuid ?? null}`,
   ]);
+  if (offline && already) return { ok: "Payment already recorded.", duplicate: true };
   if (!customer) return { error: "Customer not found." };
+  if (ids.length === 0) ids = openRows.map((s) => s.id);
+  if (ids.length === 0) return { error: `${customer.name} has no unpaid receipts to apply this payment to.` };
 
   const open = openRows.filter((s) => ids.includes(s.id));
   if (open.length !== ids.length) {
@@ -149,8 +157,10 @@ export async function recordCreditPayment(
   const remaining = round2(customer.balance - amount);
 
   const batch: Statement[] = [
-    stmt`INSERT INTO credit_ledger (customer_id, entry_type, amount, payment_method, note, actor_name)
-         VALUES (${customerId}, 'payment', ${-amount}, ${method}, ${clean(note)}, ${actor.name})`,
+    stmt`INSERT INTO credit_ledger (customer_id, entry_type, amount, payment_method, note, actor_name, client_uuid, created_at)
+         VALUES (${customerId}, 'payment', ${-amount}, ${method}, ${clean(note)}, ${actor.name},
+                 ${offline?.clientUuid ?? null},
+                 COALESCE(${offline ? clampRecordedAt(offline.recordedAt) : null}, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))`,
   ];
   allocations.forEach((a, i) => {
     // The first allocation follows the ledger insert, so last_insert_rowid()
@@ -186,6 +196,7 @@ export async function recordCreditPayment(
     if (isGuardFailure(err)) {
       return { error: "Those receipts changed while saving (paid or voided elsewhere). Refresh and try again." };
     }
+    if (offline && isUniqueFailure(err, "client_uuid")) return { ok: "Payment already recorded.", duplicate: true };
     return { error: err instanceof Error ? err.message : "Could not record the payment." };
   }
   return {

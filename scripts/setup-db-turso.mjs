@@ -177,12 +177,27 @@ const addedColumns = [
   ["sales", "customer_id", "INTEGER REFERENCES customers(id) ON DELETE SET NULL"],
   ["sales", "credit_amount", "REAL NOT NULL DEFAULT 0"],
   ["products", "photo_version", "TEXT"],
+  // Mobile app (offline) sales and payments: a unique id from the phone so a
+  // re-sent item is recorded once, where it came from, and anything the
+  // owner should look at (stock ran out / over credit limit while offline).
+  ["sales", "client_uuid", "TEXT"],
+  ["sales", "source", "TEXT NOT NULL DEFAULT 'web'"],
+  ["sales", "sync_note", "TEXT"],
+  ["credit_ledger", "client_uuid", "TEXT"],
 ];
 for (const [table, column, type] of addedColumns) {
   const { rows } = await db.execute(`PRAGMA table_info(${table})`);
   if (!rows.some((r) => r.name === column)) {
     await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
+}
+
+// Indexes on columns added above (they must exist first).
+for (const statement of [
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_client_uuid ON sales(client_uuid)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_ledger_client_uuid ON credit_ledger(client_uuid)`,
+]) {
+  await db.execute(statement);
 }
 
 console.log("Turso schema is up to date.");

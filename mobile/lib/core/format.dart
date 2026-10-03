@@ -1,0 +1,18 @@
+import 'package:intl/intl.dart';
+
+final _peso = NumberFormat.currency(locale: 'en', symbol: '₱', decimalDigits: 2);
+final _time = DateFormat('h:mm a');
+final _dateTime = DateFormat('MMM d, h:mm a');
+
+String peso(num value) => _peso.format(value);
+
+/// Whole numbers without decimals ("3"), otherwise up to two ("1.5").
+String qty(num value) =>
+    value == value.roundToDouble() ? value.toInt().toString() : value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '');
+
+/// The store runs on Philippine time (UTC+8, no daylight saving).
+DateTime manila(DateTime t) => t.toUtc().add(const Duration(hours: 8));
+
+String timeOfDay(DateTime t) => _time.format(manila(t));
+String dateTime(DateTime t) => _dateTime.format(manila(t));
+String manilaDate(DateTime t) => DateFormat('yyyy-MM-dd').format(manila(t));

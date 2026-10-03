@@ -49,6 +49,8 @@ export interface Sale {
   void_reason: string | null;
   customer_id: number | null;
   credit_amount: number; // part of the total charged to the customer's account
+  source?: "web" | "mobile";
+  sync_note?: string | null; // mobile sales: something the owner should check (stock ran out offline, etc.)
 }
 
 // A customer who can buy on credit ("utang").

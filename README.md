@@ -34,6 +34,15 @@ after the Gemellus Cashflow repo.
 - **Audit Log** (`/audit-log`) — filter by price changes, sales & voids, credit,
   stock, sign-ins.
 
+## Mobile app (offline)
+
+`mobile/` is a Flutter app for phones and tablets that keeps selling during
+blackouts and syncs when the connection returns. See [mobile/README.md](mobile/README.md).
+It uses the website's `/api/mobile/*` routes (`auth`, `bootstrap`, `sync`, `sales`),
+signed in with the same PINs. Offline sales are recorded once each (a phone-made id
+per sale), dated when they happened, and flagged for the owner if they ran past
+stock or a credit limit while offline.
+
 ## Barcode scanning
 
 Codes are matched on a product's `barcode` (or `sku`). Today, USB/Bluetooth

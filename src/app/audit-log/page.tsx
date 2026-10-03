@@ -21,6 +21,7 @@ const ACTION_LABELS: Record<string, { label: string; tone: "neutral" | "good" | 
   "product.update": { label: "Product edited", tone: "neutral" },
   "sale.create": { label: "Sale", tone: "neutral" },
   "sale.void": { label: "Sale voided", tone: "bad" },
+  "sale.offline_flag": { label: "Mobile sale to check", tone: "warn" },
   "credit.charge": { label: "Credit purchase", tone: "info" },
   "credit.payment": { label: "Credit payment", tone: "good" },
   "credit.void": { label: "Credit reversed", tone: "bad" },

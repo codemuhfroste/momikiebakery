@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The Flutter app has its own analyzer (flutter analyze); its web build
+    // output is generated JavaScript.
+    "mobile/**",
   ]),
 ]);
 
