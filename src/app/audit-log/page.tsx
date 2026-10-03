@@ -28,6 +28,9 @@ const ACTION_LABELS: Record<string, { label: string; tone: "neutral" | "good" | 
   "customer.create": { label: "Customer added", tone: "neutral" },
   "customer.update": { label: "Customer edited", tone: "neutral" },
   "stock.adjust": { label: "Stock adjusted", tone: "neutral" },
+  "category.create": { label: "Category added", tone: "neutral" },
+  "category.update": { label: "Category renamed", tone: "neutral" },
+  "category.delete": { label: "Category deleted", tone: "warn" },
   "auth.login": { label: "Signed in", tone: "neutral" },
 };
 

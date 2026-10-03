@@ -10,7 +10,8 @@
     "db:setup": "node --env-file=.env.local scripts/setup-db-turso.mjs",
     "seed:demo": "node --env-file=.env.local scripts/seed-demo.mjs",
     "seed:simulation": "tsx --env-file=.env.local scripts/seed-simulation.mts",
-    "db:reset": "node --env-file=.env.local scripts/reset-data.mjs"
+    "db:reset": "node --env-file=.env.local scripts/reset-data.mjs",
+    "go-live": "node --env-file=.env.local scripts/go-live.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

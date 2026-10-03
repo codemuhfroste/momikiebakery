@@ -7,6 +7,7 @@ import { isUniqueFailure, readBatch, runBatch, stmt } from "@/lib/db";
 import { auditStmt } from "@/lib/audit";
 import { normalizeBarcode } from "@/lib/barcode";
 import { createProduct, updateProduct } from "@/lib/products";
+import { createCategory, deleteCategory, renameCategory } from "@/lib/categories";
 import type { ActionState } from "@/lib/actionState";
 import type { Product } from "@/lib/types";
 
@@ -70,4 +71,30 @@ export async function attachBarcodeAction(productId: number, rawCode: string): P
 
   revalidatePath("/", "layout");
   return { ok: "Barcode registered." };
+}
+
+// ---- Categories (Manage categories dialog on the Products page) ----
+
+export async function createCategoryAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const session = await managerOnly();
+  if (!session) return { error: "Only the owner can manage categories." };
+  const result = await createCategory(session, fd.get("name"));
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function renameCategoryAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const session = await managerOnly();
+  if (!session) return { error: "Only the owner can manage categories." };
+  const result = await renameCategory(session, Number(fd.get("id")), fd.get("name"));
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
+}
+
+export async function deleteCategoryAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const session = await managerOnly();
+  if (!session) return { error: "Only the owner can manage categories." };
+  const result = await deleteCategory(session, Number(fd.get("id")));
+  if (result.ok) revalidatePath("/", "layout");
+  return result;
 }

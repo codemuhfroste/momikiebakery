@@ -6,6 +6,7 @@ import { auditStmt } from "./audit";
 import { round2 } from "./format";
 import { normalizeBarcode } from "./barcode";
 import { parsePhotoField, photoStatements } from "./photo";
+import { ensureCategory } from "./categories";
 import type { Actor } from "./checkout";
 import type { Product } from "./types";
 
@@ -19,13 +20,27 @@ function money(fd: FormData, key: string): number | null {
   return Number.isFinite(n) && n >= 0 ? round2(n) : null;
 }
 
+// The category picker sends an id, "" (Uncategorized), or "__new" with the
+// typed name in new_category. Returns the statements to run first (creating
+// the category if needed) and the SQL for the category id.
+const NEW_CATEGORY = "__new";
+function categoryFor(fd: FormData): { error: string } | { pre: Statement[]; id: Statement } {
+  const raw = String(fd.get("category_id") ?? "");
+  if (raw === NEW_CATEGORY) {
+    const made = ensureCategory(fd.get("new_category"));
+    if ("error" in made) return made;
+    return { pre: made.statements, id: made.idSql };
+  }
+  const id = raw ? Number(raw) : null;
+  return { pre: [], id: { sql: "?", args: [Number.isFinite(id) ? id : null] } };
+}
+
 function readFields(fd: FormData) {
   const barcodeRaw = text(fd, "barcode");
   return {
     name: text(fd, "name"),
     sku: text(fd, "sku"),
     barcode: barcodeRaw ? normalizeBarcode(barcodeRaw) : null,
-    categoryId: fd.get("category_id") ? Number(fd.get("category_id")) : null,
     srp: money(fd, "srp"),
     cost: money(fd, "cost") ?? 0,
     reorderLevel: Number(fd.get("reorder_level")) || 0,
@@ -38,16 +53,21 @@ export async function createProduct(actor: Actor, fd: FormData): Promise<{ error
   if (f.srp === null) return { error: "Enter a valid SRP." };
   const photo = parsePhotoField(fd.get("photo"));
   if ("error" in photo) return photo;
+  const category = categoryFor(fd);
+  if ("error" in category) return category;
 
   // One batch: the price_history row, the SELECT and the photo find the new
   // product through last_insert_rowid() (the SELECT doesn't change it).
   const newProductId = "(SELECT product_id FROM price_history WHERE id = last_insert_rowid())";
   try {
     const results = await runBatch([
-      stmt`INSERT INTO products (sku, barcode, name, category_id, srp, cost, stock_qty, reorder_level, photo_version)
-           VALUES (${f.sku}, ${f.barcode}, ${f.name}, ${f.categoryId}, ${f.srp}, ${f.cost},
-                   ${Number(fd.get("stock_qty")) || 0}, ${f.reorderLevel},
-                   ${photo.kind === "set" ? photo.version : null})`,
+      ...category.pre,
+      {
+        sql: `INSERT INTO products (sku, barcode, name, category_id, srp, cost, stock_qty, reorder_level, photo_version)
+              VALUES (?, ?, ?, ${category.id.sql}, ?, ?, ?, ?, ?)`,
+        args: [f.sku, f.barcode, f.name, ...category.id.args, f.srp, f.cost,
+               Number(fd.get("stock_qty")) || 0, f.reorderLevel, photo.kind === "set" ? photo.version : null],
+      },
       stmt`INSERT INTO price_history (product_id, old_srp, new_srp, actor_name)
            VALUES (last_insert_rowid(), ${null}, ${f.srp}, ${actor.name})`,
       stmt`SELECT product_id AS id FROM price_history WHERE id = last_insert_rowid()`,
@@ -62,7 +82,7 @@ export async function createProduct(actor: Actor, fd: FormData): Promise<{ error
         details: { sku: f.sku, barcode: f.barcode },
       }),
     ]);
-    return { id: (results[2][0] as { id: number }).id };
+    return { id: (results[category.pre.length + 2][0] as { id: number }).id };
   } catch (err) {
     return { error: isUniqueFailure(err) ? "That SKU or barcode is already used." : "Could not save product." };
   }
@@ -76,6 +96,8 @@ export async function updateProduct(actor: Actor, fd: FormData): Promise<{ error
   const { name, srp, cost, barcode } = f;
   const photo = parsePhotoField(fd.get("photo"));
   if ("error" in photo) return photo;
+  const category = categoryFor(fd);
+  if ("error" in category) return category;
 
   const [[before]] = await readBatch<[Product[]]>([stmt`SELECT * FROM products WHERE id = ${id}`]);
   if (!before) return { error: "Product not found." };
@@ -84,12 +106,14 @@ export async function updateProduct(actor: Actor, fd: FormData): Promise<{ error
   // one batch.
   const who = { actorName: actor.name, actorRole: actor.role };
   const batch: Statement[] = [
-    stmt`UPDATE products SET sku = ${f.sku}, barcode = ${barcode}, name = ${name},
-           category_id = ${f.categoryId}, srp = ${srp}, cost = ${cost},
-           reorder_level = ${f.reorderLevel},
-           is_active = ${fd.get("is_active") ? 1 : 0},
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-         WHERE id = ${id}`,
+    ...category.pre,
+    {
+      sql: `UPDATE products SET sku = ?, barcode = ?, name = ?, category_id = ${category.id.sql},
+              srp = ?, cost = ?, reorder_level = ?, is_active = ?,
+              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?`,
+      args: [f.sku, barcode, name, ...category.id.args, srp, cost, f.reorderLevel, fd.get("is_active") ? 1 : 0, id],
+    },
   ];
   if (Math.abs(before.srp - srp) > 0.004) {
     batch.push(

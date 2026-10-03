@@ -4,7 +4,7 @@ import Link from "next/link";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { byNumber, byString, useSearchSort } from "@/lib/useSearchSort";
 import { accountStatus, type Customer } from "@/lib/types";
-import { Badge } from "./ui";
+import { Badge, tableCls } from "./ui";
 import TableControls from "./TableControls";
 
 const SORT_OPTIONS = [
@@ -36,34 +36,34 @@ export default function CustomersTable({ customers }: { customers: Customer[] })
         <p className="px-4 py-8 text-center text-sm text-muted">No customers match.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-line bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-2.5 font-semibold">Customer</th>
-                <th className="px-4 py-2.5 font-semibold">Mobile</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Credit limit</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Balance owed</th>
-                <th className="px-4 py-2.5 font-semibold">Last activity</th>
-                <th className="px-4 py-2.5 font-semibold">Status</th>
+              <tr>
+                <th>Customer</th>
+                <th>Mobile</th>
+                <th className="text-right">Credit limit</th>
+                <th className="text-right">Balance owed</th>
+                <th>Last activity</th>
+                <th>Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody>
               {rows.map((c) => {
                 const status = accountStatus(c);
                 return (
-                  <tr key={c.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
+                  <tr key={c.id}>
+                    <td>
                       <Link href={`/customers/${c.id}`} className="font-medium text-brand hover:underline">
                         {c.name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-muted">{c.phone ?? "—"}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-muted">
+                    <td className="text-muted">{c.phone ?? "—"}</td>
+                    <td className="text-right tabular-nums text-muted">
                       {c.credit_limit == null ? "No limit" : formatCurrency(c.credit_limit)}
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{formatCurrency(c.balance)}</td>
-                    <td className="px-4 py-3 text-muted">{c.last_activity ? formatDateTime(c.last_activity) : "—"}</td>
-                    <td className="px-4 py-3">
+                    <td className="text-right font-semibold tabular-nums">{formatCurrency(c.balance)}</td>
+                    <td className="text-muted">{c.last_activity ? formatDateTime(c.last_activity) : "—"}</td>
+                    <td>
                       <Badge tone={status.tone}>{status.label}</Badge>
                     </td>
                   </tr>

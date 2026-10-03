@@ -273,7 +273,7 @@ export default function PosClient({
       </section>
 
       {/* Order summary */}
-      <aside className="flex h-fit flex-col rounded-lg border border-line bg-surface shadow-sm lg:sticky lg:top-6">
+      <aside className="flex h-fit flex-col rounded-lg border border-line bg-surface shadow-sm lg:sticky lg:top-[calc(var(--banner-h)+1.5rem)]">
         {lastSale && (
           <div role="status" className="animate-slide-down rounded-t-lg border-b border-emerald-200 bg-emerald-50 px-5 py-4">
             <div className="flex items-start justify-between gap-3">

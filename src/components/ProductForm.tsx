@@ -28,6 +28,9 @@ export default function ProductForm({
   // Held here rather than in the input alone, so the photo field can offer
   // pictures matching whatever is being typed.
   const [name, setName] = useState(product?.name ?? "");
+  // "__new" shows a box for typing a new category, created when the product
+  // is saved (see categoryFor in lib/products.ts).
+  const [categoryChoice, setCategoryChoice] = useState(String(product?.category_id ?? ""));
 
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
@@ -64,14 +67,31 @@ export default function ProductForm({
       </div>
       <div>
         <label className={labelCls}>Category</label>
-        <select name="category_id" defaultValue={product?.category_id ?? ""} className={inputCls}>
+        <select
+          name="category_id"
+          value={categoryChoice}
+          onChange={(e) => setCategoryChoice(e.target.value)}
+          className={inputCls}
+        >
           <option value="">Uncategorized</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
+          <option value="__new">+ New category…</option>
         </select>
+        {categoryChoice === "__new" && (
+          <input
+            name="new_category"
+            required
+            autoFocus
+            maxLength={40}
+            placeholder="New category name, e.g. Frozen Goods"
+            aria-label="New category name"
+            className={`${inputCls} mt-2 animate-slide-down`}
+          />
+        )}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>

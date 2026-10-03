@@ -49,7 +49,7 @@ export function Card({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={`rounded-lg border border-line bg-surface shadow-sm ${className}`}>{children}</div>;
+  return <div className={`rounded-xl border border-line bg-surface shadow-sm ${className}`}>{children}</div>;
 }
 
 export function CardHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
@@ -124,13 +124,47 @@ export function EmptyState({ children }: { children: ReactNode }) {
   return <div className="px-6 py-12 text-center text-sm text-muted">{children}</div>;
 }
 
-// Table building blocks: <Table><thead>…</thead><tbody>…</tbody></Table>
+// Table building blocks, styled like Lingkod's Secretariat tables: small
+// uppercase grey headings with no fill and a single rule underneath, rows
+// split by hairlines. Use <Table><thead>…</thead><tbody>…</tbody></Table>.
+export const tableCls =
+  "w-full text-left text-sm [&_thead_tr]:border-b [&_thead_tr]:border-line [&_th]:px-4 [&_th]:py-2 [&_th]:text-xs [&_th]:font-medium [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-slate-500 [&_tbody]:divide-y [&_tbody]:divide-slate-100 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-slate-50/70 [&_td]:px-4 [&_td]:py-3";
+
 export function Table({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm [&_tbody_tr]:border-t [&_tbody_tr]:border-line [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-slate-50 [&_td]:px-4 [&_td]:py-3 [&_th]:bg-slate-50 [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted">
-        {children}
-      </table>
+      <table className={tableCls}>{children}</table>
+    </div>
+  );
+}
+
+// The strip that opens each group in a grouped table (Lingkod's
+// per-document-type header): a coloured icon badge, the group name, a count,
+// and optional actions on the right.
+export function GroupHeader({
+  title,
+  count,
+  color,
+  icon,
+  actions,
+}: {
+  title: string;
+  count?: number;
+  color: string;
+  icon: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5">
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
+        style={{ backgroundColor: `${color}22`, color }}
+      >
+        {icon}
+      </span>
+      <h3 className="font-semibold text-slate-800">{title}</h3>
+      {count != null && <span className="text-xs text-slate-500">{count}</span>}
+      {actions && <div className="ml-auto flex items-center gap-3">{actions}</div>}
     </div>
   );
 }

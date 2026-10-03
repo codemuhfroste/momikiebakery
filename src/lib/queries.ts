@@ -15,7 +15,9 @@ import type {
 
 export async function listCategories(): Promise<Category[]> {
   const sql = getDb();
-  return sql<Category[]>`SELECT id, name FROM categories ORDER BY name`;
+  return sql<Category[]>`
+    SELECT c.id, c.name, (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) AS product_count
+    FROM categories c ORDER BY c.name COLLATE NOCASE`;
 }
 
 export async function listProducts(opts: { activeOnly?: boolean } = {}): Promise<Product[]> {

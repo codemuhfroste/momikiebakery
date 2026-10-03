@@ -90,22 +90,24 @@ own checkout, credit, void and stock logic: morning bread deliveries, cash /
 GCash / Maya / card / credit sales, down payments, credit payments, price
 overrides, voids, spoilage, a supplier price increase, and a few items left
 low on stock. Each day's records are dated to that day's store hours.
-**Run `db:reset` before the store starts using the system for real.**
+**Before the store uses the system for real, run `npm run go-live` (see below).**
 
-### Demo switches (`src/lib/demo.ts`)
+### Demo mode and going live
 
-- `SHOW_DEMO_BANNER` — the "FOR DEMO PURPOSES ONLY" bar across the top of every page.
-- `STAFF_SEES_OWNER_TABS` — temporarily lets the cashier login use every owner tab
-  except the Audit Log (voiding sales also stays owner-only).
+Demo mode is controlled by one setting, `DEMO_MODE`. Unset (the default) it shows
+the "FOR DEMO PURPOSES ONLY" banner and lets the cashier login use every owner tab
+except the Audit Log. `DEMO_MODE=off` turns both off — no code change needed.
 
-Set both to `false` when going live.
+Going live:
 
-Every network trip to Turso costs ~350 ms from the Philippines (the database is in
-AWS us-east-1), so each write action reads once and then commits everything in a
-single batch (`runBatch` in `src/lib/db.ts`). Rules that must hold at save time
-(enough stock, credit limit, not already voided/paid) are checked inside that
-batch, so two registers can't oversell, double-void or over-pay. Keep new write
-paths to the same pattern.
+```bash
+npm run go-live                            # checklist only; changes nothing
+npm run go-live -- --yes-delete-demo-data  # also empties every table
+```
+
+It checks the database and flags guessable PINs (dates, 123456…), then lists the
+dashboard steps: set `DEMO_MODE=off` and any new PINs in Vercel, redeploy, and
+rotate the Turso token.
 
 ## Layout
 

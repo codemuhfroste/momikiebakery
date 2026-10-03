@@ -70,8 +70,8 @@ export default function AppShell({
   if (!role) return <>{children}</>;
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col bg-sidebar px-3 py-5 text-white print:hidden">
+    <div className="flex min-h-[calc(100dvh-var(--banner-h))]">
+      <aside className="sticky top-[var(--banner-h)] flex h-[calc(100dvh-var(--banner-h))] w-60 shrink-0 flex-col bg-sidebar px-3 py-5 text-white print:hidden">
         <div className="mb-7 flex items-center gap-3 px-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-md bg-accent font-serif text-lg font-bold text-sidebar">
             M

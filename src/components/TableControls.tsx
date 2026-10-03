@@ -24,7 +24,7 @@ export default function TableControls({
   sortOptions: SortOptionMeta[];
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-line bg-white px-4 py-3">
+    <div className="flex flex-wrap items-center gap-2 bg-slate-50/60 px-4 py-2.5">
       <div className="relative min-w-[160px] flex-1">
         <svg
           viewBox="0 0 24 24"
@@ -48,7 +48,7 @@ export default function TableControls({
       <select
         value={sortKey}
         onChange={(e) => onSortKeyChange(e.target.value)}
-        className={`${inputCls} w-auto shrink-0`}
+        className={`${inputCls} !w-auto shrink-0`}
       >
         {sortOptions.map((o) => (
           <option key={o.key} value={o.key}>

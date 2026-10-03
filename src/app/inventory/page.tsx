@@ -46,9 +46,11 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
         ]}
       />
 
-      <Card className="mb-8">
+      <div className="mb-8">
         {rows.length === 0 ? (
-          <EmptyState>No products in this list.</EmptyState>
+          <Card>
+            <EmptyState>No products in this list.</EmptyState>
+          </Card>
         ) : (
           <InventoryTable
             rows={rows.map((p) => ({
@@ -61,7 +63,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
             }))}
           />
         )}
-      </Card>
+      </div>
 
       <Card>
         <CardHeader title="Stock history" description="The 25 most recent changes to stock, newest first." />

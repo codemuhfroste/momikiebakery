@@ -4,7 +4,8 @@ import { Fragment, useState } from "react";
 import { formatQty } from "@/lib/format";
 import { byNumber, byString, useSearchSort } from "@/lib/useSearchSort";
 import { stockStatus } from "@/lib/types";
-import { Badge, btnSecondary } from "./ui";
+import { Badge, GroupHeader, btnSecondary, tableCls } from "./ui";
+import CategoryIcon, { categoryColor } from "./CategoryIcon";
 import StockAdjustForm from "./StockAdjustForm";
 import TableControls from "./TableControls";
 import ProductThumb from "./ProductThumb";
@@ -22,9 +23,10 @@ const SORT_OPTIONS = [
   { key: "name", label: "Name (A–Z)", compare: byString<InventoryRow>((p) => p.name) },
   { key: "stock_low", label: "Stock (Lowest)", compare: byNumber<InventoryRow>((p) => p.stock_qty, "asc") },
   { key: "stock_high", label: "Stock (Highest)", compare: byNumber<InventoryRow>((p) => p.stock_qty) },
-  { key: "category", label: "Category", compare: byString<InventoryRow>((p) => p.category_name ?? "~") },
 ];
 
+// Stock levels in Lingkod's Secretariat layout: one card, search/sort on top,
+// a section per category. "Adjust" opens the stock form under its row.
 export default function InventoryTable({ rows }: { rows: InventoryRow[] }) {
   const [openId, setOpenId] = useState<number | null>(null);
   const { query, setQuery, sortKey, setSortKey, results } = useSearchSort(
@@ -33,8 +35,13 @@ export default function InventoryTable({ rows }: { rows: InventoryRow[] }) {
     SORT_OPTIONS
   );
 
+  // Categories in A–Z order, Uncategorized last.
+  const names = [...new Set(results.map((p) => p.category_name))].sort((a, b) =>
+    a === null ? 1 : b === null ? -1 : a.localeCompare(b)
+  );
+
   return (
-    <>
+    <div className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
       <TableControls
         query={query}
         onQueryChange={setQuery}
@@ -43,66 +50,75 @@ export default function InventoryTable({ rows }: { rows: InventoryRow[] }) {
         onSortKeyChange={setSortKey}
         sortOptions={SORT_OPTIONS}
       />
-      {results.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-muted">No products match.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
-                <th className="px-4 py-2.5 font-semibold">Product</th>
-                <th className="px-4 py-2.5 font-semibold">Category</th>
-                <th className="px-4 py-2.5 text-right font-semibold">In stock</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Reorder level</th>
-                <th className="px-4 py-2.5 font-semibold">Status</th>
-                <th className="px-4 py-2.5" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {results.map((p) => {
-                const s = stockStatus(p);
-                const open = openId === p.id;
-                return (
-                  <Fragment key={p.id}>
-                    <tr className={`transition-colors hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}>
-                      <td className="px-4 py-3 font-medium text-ink">
-                        <span className="flex items-center gap-3">
-                          <ProductThumb product={p} className="h-9 w-9" textClass="text-[10px]" />
-                          {p.name}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted">{p.category_name ?? "—"}</td>
-                      <td className="px-4 py-3 text-right font-medium tabular-nums">{formatQty(p.stock_qty)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-muted">{formatQty(p.reorder_level)}</td>
-                      <td className="px-4 py-3">
-                        <Badge tone={s === "ok" ? "good" : s === "low" ? "warn" : "bad"}>
-                          {s === "ok" ? "In stock" : s === "low" ? "Low stock" : "Out of stock"}
-                        </Badge>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          className={`${btnSecondary} !px-3 !py-1`}
-                          onClick={() => setOpenId(open ? null : p.id)}
-                        >
-                          {open ? "Close" : "Adjust"}
-                        </button>
-                      </td>
-                    </tr>
-                    {open && (
-                      <tr className="bg-slate-50">
-                        <td colSpan={6} className="animate-slide-down px-4">
-                          <StockAdjustForm productId={p.id} />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
+      {results.length === 0 && <p className="px-4 py-8 text-center text-sm text-muted">No products match.</p>}
+
+      {names.map((name) => {
+        const items = results.filter((p) => p.category_name === name);
+        return (
+          <section key={name ?? "none"}>
+            <GroupHeader
+              title={name ?? "Uncategorized"}
+              count={items.length}
+              color={categoryColor(name)}
+              icon={<CategoryIcon name={name} />}
+            />
+            <div className="overflow-x-auto">
+              <table className={tableCls}>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th className="text-right">In stock</th>
+                    <th className="text-right">Reorder level</th>
+                    <th>Status</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((p) => {
+                    const s = stockStatus(p);
+                    const open = openId === p.id;
+                    return (
+                      <Fragment key={p.id}>
+                        <tr className={open ? "bg-slate-50" : ""}>
+                          <td className="font-medium text-ink">
+                            <span className="flex items-center gap-3">
+                              <ProductThumb product={p} className="h-9 w-9" textClass="text-[10px]" />
+                              {p.name}
+                            </span>
+                          </td>
+                          <td className="text-right font-medium tabular-nums">{formatQty(p.stock_qty)}</td>
+                          <td className="text-right tabular-nums text-slate-600">{formatQty(p.reorder_level)}</td>
+                          <td>
+                            <Badge tone={s === "ok" ? "good" : s === "low" ? "warn" : "bad"}>
+                              {s === "ok" ? "In stock" : s === "low" ? "Low stock" : "Out of stock"}
+                            </Badge>
+                          </td>
+                          <td className="whitespace-nowrap text-right">
+                            <button
+                              type="button"
+                              className={`${btnSecondary} !px-3 !py-1`}
+                              onClick={() => setOpenId(open ? null : p.id)}
+                            >
+                              {open ? "Close" : "Adjust"}
+                            </button>
+                          </td>
+                        </tr>
+                        {open && (
+                          <tr className="bg-slate-50 hover:!bg-slate-50">
+                            <td colSpan={5} className="animate-slide-down">
+                              <StockAdjustForm productId={p.id} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      })}
+    </div>
   );
 }

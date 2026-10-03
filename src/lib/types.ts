@@ -8,6 +8,7 @@ export const CREDIT_PAYMENT_METHODS: CreditPaymentMethod[] = ["Cash", "GCash", "
 export interface Category {
   id: number;
   name: string;
+  product_count?: number;
 }
 
 // `srp` is the suggested retail price — the reference price every sale is

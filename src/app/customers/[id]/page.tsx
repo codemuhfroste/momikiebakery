@@ -4,7 +4,7 @@ import { canManage, requireSessionOrRedirect } from "@/lib/rbac";
 import { getCreditItems, getCustomer, getLedger, getOpenCreditSales } from "@/lib/queries";
 import { formatCurrency, formatDate, formatDateTime, formatQty } from "@/lib/format";
 import { CREDIT_STATUS_LABELS, accountStatus, creditPaymentStatus, type CreditItem } from "@/lib/types";
-import { Badge, Card, CardHeader, EmptyState, PageHeader, Stat, Tabs } from "@/components/ui";
+import { Badge, Card, CardHeader, EmptyState, PageHeader, Stat, Tabs, tableCls } from "@/components/ui";
 import CustomerForm from "@/components/CustomerForm";
 import CreditPaymentForm from "@/components/CreditPaymentForm";
 
@@ -90,17 +90,17 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
               <EmptyState>No credit activity yet.</EmptyState>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className={tableCls}>
                   <thead>
-                    <tr className="border-b border-line bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
-                      <th className="px-4 py-2.5 font-semibold">Date</th>
-                      <th className="px-4 py-2.5 font-semibold">Description</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Charge</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Payment</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Balance</th>
+                    <tr>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th className="text-right">Charge</th>
+                      <th className="text-right">Payment</th>
+                      <th className="text-right">Balance</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-line">
+                  <tbody>
                     {withBalance.map((e) => {
                       const items = e.sale_id ? itemsBySale.get(e.sale_id) ?? [] : [];
                       const receiptStatus =
@@ -110,7 +110,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
                       return (
                         <tr key={e.id} className="align-top hover:bg-slate-50">
                           <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDateTime(e.created_at)}</td>
-                          <td className="px-4 py-3">
+                          <td>
                             {e.entry_type === "charge" && (
                               <>
                                 <div className="flex flex-wrap items-center gap-2">
@@ -160,13 +160,13 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
                             )}
                             {e.note && <div className="text-xs text-muted">{e.note}</div>}
                           </td>
-                          <td className="px-4 py-3 text-right tabular-nums">
+                          <td className="text-right tabular-nums">
                             {e.amount > 0 ? formatCurrency(e.amount) : ""}
                           </td>
-                          <td className="px-4 py-3 text-right tabular-nums text-emerald-700">
+                          <td className="text-right tabular-nums text-emerald-700">
                             {e.amount < 0 ? formatCurrency(-e.amount) : ""}
                           </td>
-                          <td className="px-4 py-3 text-right font-medium tabular-nums">
+                          <td className="text-right font-medium tabular-nums">
                             {formatCurrency(e.running)}
                           </td>
                         </tr>
@@ -199,19 +199,19 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
               </EmptyState>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className={tableCls}>
                   <thead>
-                    <tr className="border-b border-line bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
-                      <th className="px-4 py-2.5 font-semibold">Date</th>
-                      <th className="px-4 py-2.5 font-semibold">Receipt</th>
-                      <th className="px-4 py-2.5 font-semibold">Product</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Qty</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Price</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Amount</th>
-                      <th className="px-4 py-2.5 font-semibold">Receipt status</th>
+                    <tr>
+                      <th>Date</th>
+                      <th>Receipt</th>
+                      <th>Product</th>
+                      <th className="text-right">Qty</th>
+                      <th className="text-right">Price</th>
+                      <th className="text-right">Amount</th>
+                      <th>Receipt status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-line">
+                  <tbody>
                     {visibleItems.map((i) => {
                       const st = i.voided
                         ? { label: "Voided", tone: "neutral" as const }
@@ -226,13 +226,13 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
                               {i.receipt_no}
                             </Link>
                           </td>
-                          <td className="px-4 py-2.5">{i.name}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums">{formatQty(i.qty)}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrency(i.unit_price)}</td>
+                          <td>{i.name}</td>
+                          <td className="text-right tabular-nums">{formatQty(i.qty)}</td>
+                          <td className="text-right tabular-nums">{formatCurrency(i.unit_price)}</td>
                           <td className={`px-4 py-2.5 text-right tabular-nums ${i.voided ? "line-through" : ""}`}>
                             {formatCurrency(i.line_total)}
                           </td>
-                          <td className="px-4 py-2.5">
+                          <td>
                             <Badge tone={st.tone}>{st.label}</Badge>
                           </td>
                         </tr>
