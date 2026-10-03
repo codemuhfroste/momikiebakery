@@ -22,9 +22,10 @@ export async function proxy(request: NextRequest) {
 
   if (session.role === "cashier") {
     const { pathname } = request.nextUrl;
-    // Demo: staff may open everything except the audit log.
+    // Demo: staff may open everything except the audit log and staff accounts.
+    const ownerOnly = ["/audit-log", "/staff"].some((p) => pathname === p || pathname.startsWith(`${p}/`));
     const allowed = STAFF_SEES_OWNER_TABS
-      ? !(pathname === "/audit-log" || pathname.startsWith("/audit-log/"))
+      ? !ownerOnly
       : CASHIER_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) &&
         !CASHIER_BLOCKED.includes(pathname);
     if (!allowed) return NextResponse.redirect(new URL("/pos", request.url));

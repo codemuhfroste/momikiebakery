@@ -135,9 +135,34 @@ body {
   }
 }
 
-/* Receipts print on their own, without the sidebar or top bar. */
+/* Receipts print on their own, without the sidebar or top bar. The paper
+   size is picked next to the Print button (PrintButton sets data-paper on
+   <html> and the matching @page size): thermal rolls are 58 mm or 80 mm. */
 @media print {
   body {
     background: white;
+  }
+  html[data-paper="80"] .receipt-print,
+  html[data-paper="58"] .receipt-print {
+    margin: 0;
+    padding: 0;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    color: #000;
+  }
+  html[data-paper="80"] .receipt-print {
+    width: 74mm;
+    font-size: 11px;
+  }
+  html[data-paper="58"] .receipt-print {
+    width: 54mm;
+    font-size: 10px;
+  }
+  html[data-paper="80"] .receipt-print *,
+  html[data-paper="58"] .receipt-print * {
+    color: #000 !important;
+    font-size: inherit !important;
   }
 }

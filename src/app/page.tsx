@@ -4,11 +4,18 @@ import { getDb } from "@/lib/db";
 import { getCreditSummary, listCustomers } from "@/lib/queries";
 import { formatCurrency, manilaDayRange, manilaToday } from "@/lib/format";
 import { Card, CardHeader, PageHeader, Stat, btnPrimary, btnSecondary } from "@/components/ui";
+import SalesBarChart from "@/components/SalesBarChart";
+import { fillDays, getSalesReport } from "@/lib/reports";
+
+const addDays = (d: string, n: number) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86400_000).toISOString().slice(0, 10);
 
 export default async function DashboardPage() {
   await requireManagerOrRedirect();
   const sql = getDb();
   const [start, end] = manilaDayRange(manilaToday());
+  const today = manilaToday();
+  const trendFrom = addDays(today, -13);
+  const trend = fillDays(trendFrom, today, (await getSalesReport(trendFrom, today)).byDay);
 
   const [[sales], [low], [overrides], top, credit, customers] = await Promise.all([
     sql<{ count: number; total: number; profit: number }[]>`
@@ -54,6 +61,21 @@ export default async function DashboardPage() {
           tone={overrides.count ? "warn" : "default"}
         />
       </div>
+
+      <Card className="mb-8">
+        <CardHeader
+          title="Sales — last 14 days"
+          description="Hover a bar for that day's figures."
+          actions={
+            <Link href="/reports/sales" className={`${btnSecondary} !px-3 !py-1 text-xs`}>
+              Full report
+            </Link>
+          }
+        />
+        <div className="px-3 pb-3 pt-4">
+          <SalesBarChart data={trend} label="Sales per day, last 14 days" />
+        </div>
+      </Card>
 
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Overall</h2>
       <div className="stagger mb-8 grid gap-4 sm:grid-cols-2">

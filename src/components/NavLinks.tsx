@@ -10,6 +10,9 @@ const ICONS = {
   credit: "M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20c0-3 3-5 6-5s6 2 6 5M14 15.5c.6-.3 1.3-.5 2-.5 3 0 6 2 6 5",
   products: "M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8",
   inventory: "M3 7h18M5 7v13h14V7M9 11h6",
+  eod: "M4 4h16v16H4zM8 9h8M8 13h8M8 17h4",
+  report: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+  staff: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6 8-6s8 2 8 6",
   scanner: "M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2M7 9v6M10 9v6M14 9v6M17 9v6",
   audit: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3zM9 12l2 2 4-4",
 };
@@ -27,6 +30,12 @@ export interface NavGroup {
 
 export default function NavLinks({ groups }: { groups: NavGroup[] }) {
   const pathname = usePathname();
+  // The most specific link wins, so /reports/sales lights up "Sales Report"
+  // and not also "End of Day" (/reports).
+  const activeHref = groups
+    .flatMap((g) => g.items.map((i) => i.href))
+    .filter((h) => (h === "/" ? pathname === "/" : pathname === h || pathname.startsWith(`${h}/`)))
+    .sort((a, b) => b.length - a.length)[0];
   return (
     <nav className="flex flex-col gap-5">
       {groups.map((g) => (
@@ -36,7 +45,7 @@ export default function NavLinks({ groups }: { groups: NavGroup[] }) {
           </div>
           <div className="flex flex-col gap-0.5">
             {g.items.map((n) => {
-              const active = n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
+              const active = n.href === activeHref;
               return (
                 <Link
                   key={n.href}

@@ -22,9 +22,17 @@ const OWNER_NAV: NavGroup[] = [
     ],
   },
   {
+    label: "Reports",
+    items: [
+      { href: "/reports", label: "End of Day", icon: "eod" },
+      { href: "/reports/sales", label: "Sales Report", icon: "report" },
+    ],
+  },
+  {
     label: "Records",
     items: [
       { href: "/audit-log", label: "Audit Log", icon: "audit" },
+      { href: "/staff", label: "Staff", icon: "staff" },
       { href: "/scanner", label: "Scanner Check", icon: "scanner" },
     ],
   },
@@ -54,7 +62,7 @@ function todayLabel() {
 // Demo (STAFF_SEES_OWNER_TABS): staff get every owner tab except the Audit Log.
 const STAFF_DEMO_NAV: NavGroup[] = OWNER_NAV.map((g) => ({
   ...g,
-  items: g.items.filter((i) => i.href !== "/audit-log"),
+  items: g.items.filter((i) => i.href !== "/audit-log" && i.href !== "/staff"),
 })).filter((g) => g.items.length > 0);
 
 // Signed-out pages (/login, /owner) render without the chrome.

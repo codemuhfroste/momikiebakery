@@ -3,7 +3,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  checkRolePin,
   createSessionToken,
   isLoginRole,
   SESSION_COOKIE,
@@ -11,6 +10,7 @@ import {
   type Role,
 } from "@/lib/auth";
 import { isLoginLocked, recordLoginResult } from "@/lib/loginThrottle";
+import { authenticate } from "@/lib/staff";
 import { logAudit } from "@/lib/audit";
 
 async function setSessionCookie(role: Role, name: string) {
@@ -33,7 +33,7 @@ export async function loginAction(formData: FormData) {
   const page = loginRole === "owner" ? "/owner" : "/login";
   if (await isLoginLocked()) redirect(`${page}?error=locked`);
 
-  const result = checkRolePin(String(formData.get("pin") ?? ""), loginRole);
+  const result = await authenticate(String(formData.get("pin") ?? ""), loginRole);
   await recordLoginResult(result !== null);
   if (!result) redirect(`${page}?error=1`);
 

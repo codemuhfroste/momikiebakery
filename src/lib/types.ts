@@ -64,6 +64,7 @@ export interface Customer {
   is_active: number; // 0/1
   balance: number; // SUM of their credit_ledger rows
   last_activity: string | null;
+  oldest_unpaid?: string | null; // when their oldest unpaid credit receipt was made
 }
 
 export type LedgerEntryType = "charge" | "payment" | "void";
@@ -171,4 +172,18 @@ export function accountStatus(
   if (c.credit_limit != null && c.balance > c.credit_limit + 0.004) return { tone: "bad", label: "Over limit" };
   if (c.balance > 0.004) return { tone: "warn", label: "Has balance" };
   return { tone: "good", label: "Paid up" };
+}
+
+// How long a credit balance has been owed, for the "aging" shown on credit
+// accounts and statements.
+export function daysSince(iso: string | null | undefined, now = Date.now()): number | null {
+  if (!iso) return null;
+  return Math.max(0, Math.floor((now - Date.parse(iso)) / 86400_000));
+}
+
+export function agingTone(days: number | null): { tone: "neutral" | "warn" | "bad"; label: string } | null {
+  if (days == null) return null;
+  if (days > 60) return { tone: "bad", label: `${days} days` };
+  if (days > 30) return { tone: "warn", label: `${days} days` };
+  return { tone: "neutral", label: days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"}` };
 }

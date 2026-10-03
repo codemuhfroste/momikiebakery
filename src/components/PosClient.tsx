@@ -10,6 +10,7 @@ import { formatCurrency, formatQty, round2 } from "@/lib/format";
 import { useBarcodeScanner } from "@/lib/useBarcodeScanner";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/types";
 import { Badge, Spinner, btnPrimary, btnSecondary, inputCls, labelCls } from "./ui";
+import DialogPanel from "./DialogPanel";
 import ProductThumb from "./ProductThumb";
 
 export interface PosProduct {
@@ -674,7 +675,7 @@ function UnknownBarcodeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-md animate-scale-in rounded-lg bg-surface p-6 shadow-xl">
+      <DialogPanel label="Barcode not registered" className="w-full max-w-md animate-scale-in rounded-lg bg-surface p-6 shadow-xl">
         <h2 className="text-lg font-semibold">Barcode not registered</h2>
         <p className="mt-1 text-sm text-muted">
           The barcode <span className="font-mono text-ink">{code}</span> is not linked to any product. Link it to
@@ -715,7 +716,7 @@ function UnknownBarcodeModal({
             Cancel
           </button>
         </div>
-      </div>
+      </DialogPanel>
     </div>
   );
 }

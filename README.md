@@ -34,6 +34,26 @@ after the Gemellus Cashflow repo.
 - **Audit Log** (`/audit-log`) — filter by price changes, sales & voids, credit,
   stock, sign-ins.
 
+## Reports, staff and statements
+
+- **End of Day** (`/reports`) — closing summary: sales by payment method, cash that
+  should be in the drawer (cash sales + cash down payments + cash credit payments)
+  with a counted-cash over/short check, credit put on accounts and payments received,
+  voids, discounts, profit. Printable.
+- **Sales Report** (`/reports/sales`) — any date range (presets: today, 7/14/30 days,
+  this month): totals, a day-by-day chart, by category, best sellers, by payment
+  method; **Excel downloads** (CSV) of sales or of every item sold.
+- **Dashboard** — adds a 14-day sales chart.
+- **Credit aging** — "Owed for" on Credit Accounts (amber past 30 days, red past 60),
+  and a printable **statement of account** per customer (`/customers/[id]/statement`)
+  with 0–30 / 31–60 / 61–90 / 90+ day buckets.
+- **Receipts** print on 58 mm or 80 mm thermal rolls, or A4 (choice remembered per device).
+- **Staff** (`/staff`, owner only) — named staff logins: each person signs in at
+  `/login` with their own PIN (stored only as a salted hash; PINs must be unique and
+  not guessable), so receipts and the Audit Log show who did what. The shared
+  cashier PIN still works.
+- **Audit Log** search by words and date range.
+
 ## Mobile app (offline)
 
 `mobile/` is a Flutter app for phones and tablets that keeps selling during

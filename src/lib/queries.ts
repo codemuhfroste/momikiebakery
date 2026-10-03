@@ -98,7 +98,11 @@ export async function listCustomers(opts: { activeOnly?: boolean } = {}): Promis
   const rows = await sql<Customer[]>`
     SELECT c.*,
       COALESCE((SELECT SUM(amount) FROM credit_ledger l WHERE l.customer_id = c.id), 0) AS balance,
-      (SELECT MAX(created_at) FROM credit_ledger l WHERE l.customer_id = c.id) AS last_activity
+      (SELECT MAX(created_at) FROM credit_ledger l WHERE l.customer_id = c.id) AS last_activity,
+      (SELECT MIN(s.created_at) FROM sales s
+        WHERE s.customer_id = c.id AND s.credit_amount > 0 AND s.voided_at IS NULL
+          AND s.credit_amount - COALESCE((SELECT SUM(a.amount) FROM credit_allocations a WHERE a.sale_id = s.id), 0) > 0.004
+      ) AS oldest_unpaid
     FROM customers c ORDER BY c.name`;
   return opts.activeOnly ? rows.filter((c) => c.is_active) : rows;
 }
@@ -108,7 +112,11 @@ export async function getCustomer(id: number): Promise<Customer | null> {
   const rows = await sql<Customer[]>`
     SELECT c.*,
       COALESCE((SELECT SUM(amount) FROM credit_ledger l WHERE l.customer_id = c.id), 0) AS balance,
-      (SELECT MAX(created_at) FROM credit_ledger l WHERE l.customer_id = c.id) AS last_activity
+      (SELECT MAX(created_at) FROM credit_ledger l WHERE l.customer_id = c.id) AS last_activity,
+      (SELECT MIN(s.created_at) FROM sales s
+        WHERE s.customer_id = c.id AND s.credit_amount > 0 AND s.voided_at IS NULL
+          AND s.credit_amount - COALESCE((SELECT SUM(a.amount) FROM credit_allocations a WHERE a.sale_id = s.id), 0) > 0.004
+      ) AS oldest_unpaid
     FROM customers c WHERE c.id = ${id}`;
   return rows[0] ?? null;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import DialogPanel from "./DialogPanel";
 
 // How long the first click outside stays "armed". Click outside again within
 // this window and the dialog closes; wait longer and it starts over.
@@ -62,10 +63,8 @@ export default function Modal({
       className="fixed inset-0 z-50 flex animate-fade-in items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:p-6"
       onMouseDown={onBackdrop}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
+      <DialogPanel
+        label={title}
         // Clicks inside must never reach the backdrop handler, or typing in
         // the form would arm (and then trigger) the close.
         onMouseDown={(e) => e.stopPropagation()}
@@ -96,7 +95,7 @@ export default function Modal({
 
         <div className="px-6 py-5">{children}</div>
         {footer && <div className="border-t border-line px-6 py-3">{footer}</div>}
-      </div>
+      </DialogPanel>
     </div>
   );
 }

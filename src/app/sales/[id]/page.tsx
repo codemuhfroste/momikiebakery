@@ -30,7 +30,7 @@ export default async function SaleDetailPage({ params, searchParams }: PageProps
           back={{ href: "/sales", label: "Transactions" }}
           actions={
             <>
-              <PrintButton />
+              <PrintButton paper />
               <Link href="/pos" className={btnPrimary}>
                 New sale
               </Link>
@@ -54,10 +54,10 @@ export default async function SaleDetailPage({ params, searchParams }: PageProps
         )}
       </div>
 
-      <Card className="mx-auto max-w-md p-6 print:max-w-none print:border-0 print:shadow-none">
+      <Card className="receipt-print mx-auto max-w-md p-6 print:max-w-none print:border-0 print:shadow-none">
         <div className="text-center">
           <div className="text-base font-semibold uppercase tracking-wide">Momikie&apos;s General Merchandise</div>
-          <div className="mt-1 text-xs text-muted">Official Receipt No. {sale.receipt_no}</div>
+          <div className="mt-1 text-xs text-muted">Receipt No. {sale.receipt_no}</div>
           <div className="text-xs text-muted">{formatDateTime(sale.created_at)}</div>
           <div className="text-xs text-muted">Cashier: {sale.cashier_name}</div>
           {sale.customer_name && <div className="text-xs text-muted">Customer: {sale.customer_name}</div>}

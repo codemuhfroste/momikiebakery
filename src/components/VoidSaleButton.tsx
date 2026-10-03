@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { voidSaleAction } from "@/app/sales/actions";
 import type { ActionState } from "@/lib/actionState";
 import { Spinner, btnDanger, btnSecondary, inputCls, labelCls } from "./ui";
+import DialogPanel from "./DialogPanel";
 
 // Void straight from the transactions table, so the owner doesn't have to open
 // every receipt. Same server action as the one on the receipt page, which is
@@ -52,7 +53,7 @@ export default function VoidSaleButton({
 
       {open && (
         <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-md animate-scale-in rounded-lg bg-surface p-6 shadow-xl">
+          <DialogPanel label={`Void receipt ${receiptNo}`} className="w-full max-w-md animate-scale-in rounded-lg bg-surface p-6 shadow-xl">
             <h2 className="text-lg font-semibold">Void receipt {receiptNo}?</h2>
             <p className="mt-1 text-sm text-muted">
               This cancels the {total} sale and returns its items to stock
@@ -88,7 +89,7 @@ export default function VoidSaleButton({
                 </button>
               </div>
             </form>
-          </div>
+          </DialogPanel>
         </div>
       )}
     </>

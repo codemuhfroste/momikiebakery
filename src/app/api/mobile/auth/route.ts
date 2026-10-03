@@ -1,4 +1,5 @@
-import { checkRolePin, createSessionToken, isLoginRole } from "@/lib/auth";
+import { createSessionToken, isLoginRole } from "@/lib/auth";
+import { authenticate } from "@/lib/staff";
 import { logAudit } from "@/lib/audit";
 import { isLoginLocked, recordLoginResult } from "@/lib/loginThrottle";
 import { json, preflight } from "@/lib/mobileAuth";
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
   if (await isLoginLocked()) return json({ error: "Too many incorrect PINs. Try again in an hour." }, 429);
 
   const pin = typeof body?.pin === "string" ? body.pin : "";
-  const result = checkRolePin(pin, loginRole);
+  const result = await authenticate(pin, loginRole);
   await recordLoginResult(result !== null);
   if (!result) return json({ error: "That PIN isn't right." }, 401);
 

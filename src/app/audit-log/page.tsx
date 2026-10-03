@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireOwnerOrRedirect } from "@/lib/rbac";
 import { getAuditLogPage, type AuditFilter } from "@/lib/audit";
 import { formatDateTime } from "@/lib/format";
-import { Badge, Card, EmptyState, PageHeader, Table, Tabs } from "@/components/ui";
+import { Badge, Card, EmptyState, PageHeader, Table, Tabs, btnSecondary, inputCls } from "@/components/ui";
 
 const FILTERS: { key: AuditFilter; label: string }[] = [
   { key: "all", label: "All activity" },
@@ -30,6 +30,9 @@ const ACTION_LABELS: Record<string, { label: string; tone: "neutral" | "good" | 
   "customer.update": { label: "Customer edited", tone: "neutral" },
   "stock.adjust": { label: "Stock adjusted", tone: "neutral" },
   "category.create": { label: "Category added", tone: "neutral" },
+  "staff.create": { label: "Staff added", tone: "neutral" },
+  "staff.update": { label: "Staff changed", tone: "warn" },
+  "staff.pin_reset": { label: "Staff PIN changed", tone: "warn" },
   "category.update": { label: "Category renamed", tone: "neutral" },
   "category.delete": { label: "Category deleted", tone: "warn" },
   "auth.login": { label: "Signed in", tone: "neutral" },
@@ -39,8 +42,22 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/audit-l
   await requireOwnerOrRedirect();
   const params = await searchParams;
   const filter = FILTERS.find((f) => f.key === params.filter)?.key ?? "all";
-  const { entries, page, totalPages, totalCount } = await getAuditLogPage(Number(params.page) || 1, filter);
-  const href = (p: number) => `/audit-log?filter=${filter}&page=${p}`;
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const q = str(params.q).trim();
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(str(params.from)) ? str(params.from) : "";
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(str(params.to)) ? str(params.to) : "";
+  const { entries, page, totalPages, totalCount } = await getAuditLogPage(Number(params.page) || 1, filter, { q, from, to });
+  // Links keep the search and dates while changing tab or page.
+  const link = (f: string, p = 1) => {
+    const sp = new URLSearchParams({ filter: f });
+    if (q) sp.set("q", q);
+    if (from) sp.set("from", from);
+    if (to) sp.set("to", to);
+    if (p > 1) sp.set("page", String(p));
+    return `/audit-log?${sp}`;
+  };
+  const href = (p: number) => link(filter, p);
+  const searching = Boolean(q || from || to);
 
   return (
     <>
@@ -48,10 +65,37 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/audit-l
         title="Audit Log"
         subtitle="A permanent record of who did what and when. Entries cannot be edited or deleted."
       />
-      <Tabs active={filter} tabs={FILTERS.map((f) => ({ ...f, href: `/audit-log?filter=${f.key}` }))} />
+      <form className="mb-4 flex flex-wrap items-end gap-3">
+        <input type="hidden" name="filter" value={filter} />
+        <div className="min-w-[220px] flex-1">
+          <label htmlFor="q" className="mb-1 block text-xs font-medium text-muted">
+            Search
+          </label>
+          <input id="q" name="q" defaultValue={q} placeholder="Product, receipt no., customer, person…" className={inputCls} />
+        </div>
+        <div>
+          <label htmlFor="from" className="mb-1 block text-xs font-medium text-muted">
+            From
+          </label>
+          <input id="from" type="date" name="from" defaultValue={from} className={`${inputCls} w-auto`} />
+        </div>
+        <div>
+          <label htmlFor="to" className="mb-1 block text-xs font-medium text-muted">
+            To
+          </label>
+          <input id="to" type="date" name="to" defaultValue={to} className={`${inputCls} w-auto`} />
+        </div>
+        <button className={btnSecondary}>Search</button>
+        {searching && (
+          <Link href={`/audit-log?filter=${filter}`} className="pb-2 text-sm text-brand hover:underline">
+            Clear
+          </Link>
+        )}
+      </form>
+      <Tabs active={filter} tabs={FILTERS.map((f) => ({ ...f, href: link(f.key) }))} />
       <Card>
         {entries.length === 0 ? (
-          <EmptyState>No entries.</EmptyState>
+          <EmptyState>{searching ? "No entries match this search." : "No entries."}</EmptyState>
         ) : (
           <Table>
             <thead>
@@ -80,6 +124,9 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/audit-l
           </Table>
         )}
       </Card>
+      {searching && totalPages <= 1 && entries.length > 0 && (
+        <p className="mt-3 text-sm text-muted">{totalCount} matching entries.</p>
+      )}
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between text-sm text-muted">
           <span>

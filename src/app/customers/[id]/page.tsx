@@ -4,7 +4,7 @@ import { canManage, requireSessionOrRedirect } from "@/lib/rbac";
 import { getCreditItems, getCustomer, getLedger, getOpenCreditSales } from "@/lib/queries";
 import { formatCurrency, formatDate, formatDateTime, formatQty } from "@/lib/format";
 import { CREDIT_STATUS_LABELS, accountStatus, creditPaymentStatus, type CreditItem } from "@/lib/types";
-import { Badge, Card, CardHeader, EmptyState, PageHeader, Stat, Tabs, tableCls } from "@/components/ui";
+import { Badge, Card, CardHeader, EmptyState, PageHeader, Stat, Tabs, tableCls, btnSecondary } from "@/components/ui";
 import CustomerForm from "@/components/CustomerForm";
 import CreditPaymentForm from "@/components/CreditPaymentForm";
 
@@ -59,6 +59,11 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
           </span>
         }
         back={{ href: "/customers", label: "Credit Accounts" }}
+        actions={
+          <Link href={`/customers/${customer.id}/statement`} className={btnSecondary}>
+            Print statement
+          </Link>
+        }
       />
 
       <div className="stagger mb-6 grid gap-4 sm:grid-cols-3">

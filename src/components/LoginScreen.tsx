@@ -14,7 +14,7 @@ const ERRORS: Record<string, string> = {
 const COPY: Record<LoginRole, { heading: string; subheading: string; button: string }> = {
   cashier: {
     heading: "Cashier sign in",
-    subheading: "Enter your cashier PIN to open the register and record sales and credit payments.",
+    subheading: "Enter your own staff PIN (or the shared cashier PIN) to open the register and record sales and credit payments.",
     button: "Sign in",
   },
   owner: {

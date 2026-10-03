@@ -148,6 +148,17 @@ const statements = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_credit_allocations_sale ON credit_allocations(sale_id)`,
   `CREATE INDEX IF NOT EXISTS idx_credit_allocations_payment ON credit_allocations(payment_id)`,
+  // Named staff logins (Staff page). PINs are stored only as salted PBKDF2
+  // hashes; see src/lib/staff.ts.
+  `CREATE TABLE IF NOT EXISTS staff (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    pin_salt TEXT NOT NULL,
+    pin_hash TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    last_login_at TEXT,
+    created_at TEXT NOT NULL DEFAULT ${NOW}
+  )`,
   `CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     actor_name TEXT,
