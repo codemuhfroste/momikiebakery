@@ -1,13 +1,13 @@
-import Link from "next/link";
 import { requireManagerOrRedirect } from "@/lib/rbac";
-import { listProducts } from "@/lib/queries";
+import { listCategories, listProducts } from "@/lib/queries";
 import { formatCurrency } from "@/lib/format";
 import ProductThumb from "@/components/ProductThumb";
+import ProductDialogButton from "@/components/ProductDialogButton";
 import { Badge, Card, EmptyState, PageHeader, Table, btnPrimary } from "@/components/ui";
 
 export default async function ProductsPage() {
   await requireManagerOrRedirect();
-  const products = await listProducts();
+  const [products, categories] = await Promise.all([listProducts(), listCategories()]);
 
   return (
     <>
@@ -15,9 +15,9 @@ export default async function ProductsPage() {
         title="Products"
         subtitle="Everything the store sells. SRP is the Suggested Retail Price — the normal selling price used at the register. Changes to an SRP are recorded in the Audit Log."
         actions={
-          <Link href="/products/new" className={btnPrimary}>
+          <ProductDialogButton categories={categories} className={btnPrimary}>
             + Add product
-          </Link>
+          </ProductDialogButton>
         }
       />
       <Card>
@@ -43,9 +43,13 @@ export default async function ProductsPage() {
                     <div className="flex items-center gap-3">
                       <ProductThumb product={p} />
                       <div>
-                        <Link href={`/products/${p.id}`} className="font-medium text-brand hover:underline">
+                        <ProductDialogButton
+                          categories={categories}
+                          product={p}
+                          className="text-left font-medium text-brand hover:underline"
+                        >
                           {p.name}
-                        </Link>
+                        </ProductDialogButton>
                         {p.sku && <div className="text-xs text-muted">{p.sku}</div>}
                       </div>
                     </div>

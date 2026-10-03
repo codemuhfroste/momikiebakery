@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { createProductAction, updateProductAction } from "@/app/products/actions";
+import type { ActionState } from "@/lib/actionState";
 import type { Category, Product } from "@/lib/types";
 import { Spinner, btnPrimary, hintCls, inputCls, labelCls } from "./ui";
 import ProductPhotoField from "./ProductPhotoField";
@@ -10,15 +11,20 @@ export default function ProductForm({
   product,
   categories,
   defaultBarcode,
+  onSaved,
 }: {
   product?: Product;
   defaultBarcode?: string;
   categories: Category[];
+  // Set when the form is shown in a dialog: suppresses the redirect that the
+  // standalone page relies on, and reports success so the dialog can close.
+  onSaved?: () => void;
 }) {
-  const [state, action, pending] = useActionState(
-    product ? updateProductAction : createProductAction,
-    {}
-  );
+  const [state, action, pending] = useActionState(async (prev: ActionState, fd: FormData) => {
+    const result = await (product ? updateProductAction : createProductAction)(prev, fd);
+    if (result?.ok) onSaved?.();
+    return result;
+  }, {} as ActionState);
   // Held here rather than in the input alone, so the photo field can offer
   // pictures matching whatever is being typed.
   const [name, setName] = useState(product?.name ?? "");
@@ -26,6 +32,7 @@ export default function ProductForm({
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
       {product && <input type="hidden" name="id" value={product.id} />}
+      {onSaved && <input type="hidden" name="no_redirect" value="1" />}
 
       <div className="sm:col-span-2">
         <ProductPhotoField product={product} productName={name} />

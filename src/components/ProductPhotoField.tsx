@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { resizeImage } from "@/lib/resizeImage";
 import { productPhotoUrl } from "@/lib/types";
 import type { ProductImageHit } from "@/app/api/product-images/route";
-import { Spinner, btnSecondary, hintCls, labelCls } from "./ui";
+import { Spinner, btnSecondary, hintCls, inputCls, labelCls } from "./ui";
 
 const MIN_QUERY = 3;
 const DEBOUNCE_MS = 450;
@@ -32,11 +32,17 @@ export default function ProductPhotoField({
   const [suggestions, setSuggestions] = useState<ProductImageHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  // null while the strip is only following the product name. "Search image"
+  // sets it, which both opens the strip and lets the term be edited - useful
+  // when the catalogue name ("C2 GREEN TEA 500ML PET") is not what the
+  // databases call the thing.
+  const [manualQuery, setManualQuery] = useState<string | null>(null);
 
-  const query = productName.trim();
-  // Nothing to suggest once a picture is chosen, or once they've closed the
-  // strip for this product.
-  const wantSuggestions = !dismissed && !preview && query.length >= MIN_QUERY;
+  const query = (manualQuery ?? productName).trim();
+  // Suggestions follow the name while the slot is still empty; once a picture
+  // is chosen, or the strip is closed, only the button brings them back.
+  const wantSuggestions =
+    manualQuery !== null || (!dismissed && !preview && query.length >= MIN_QUERY);
 
   useEffect(() => {
     if (!wantSuggestions) return;
@@ -126,6 +132,17 @@ export default function ProductPhotoField({
           <button type="button" className={btnSecondary} onClick={() => input.current?.click()} disabled={busy}>
             {preview ? "Change photo" : "Upload photo"}
           </button>
+          <button
+            type="button"
+            className={btnSecondary}
+            onClick={() => {
+              setDismissed(false);
+              setManualQuery(productName.trim());
+            }}
+            disabled={busy}
+          >
+            Search image
+          </button>
           {preview && (
             <button type="button" onClick={remove} className="block text-sm text-red-600 hover:underline">
               Remove photo
@@ -134,7 +151,7 @@ export default function ProductPhotoField({
         </div>
       </div>
 
-      {wantSuggestions && (searching || suggestions.length > 0) && (
+      {wantSuggestions && (manualQuery !== null || searching || suggestions.length > 0) && (
         <div className="mt-3 animate-slide-down rounded-lg border border-line bg-slate-50 p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <span className="text-xs font-medium text-muted">
@@ -149,12 +166,30 @@ export default function ProductPhotoField({
             </span>
             <button
               type="button"
-              onClick={() => setDismissed(true)}
+              onClick={() => {
+                setManualQuery(null);
+                setDismissed(true);
+              }}
               className="shrink-0 text-xs text-muted hover:text-ink hover:underline"
             >
               Hide
             </button>
           </div>
+          {manualQuery !== null && (
+            <input
+              value={manualQuery}
+              autoFocus
+              onChange={(e) => setManualQuery(e.target.value)}
+              placeholder="What to search for, e.g. C2 apple"
+              aria-label="Search for a product picture"
+              className={`${inputCls} mb-2`}
+            />
+          )}
+          {!searching && suggestions.length === 0 && query.length >= MIN_QUERY && (
+            <p className="text-xs text-muted">
+              No pictures found. Try a shorter or more common name, or upload your own.
+            </p>
+          )}
           {suggestions.length > 0 && (
             <ul className="flex gap-2 overflow-x-auto pb-1">
               {suggestions.map((hit) => (

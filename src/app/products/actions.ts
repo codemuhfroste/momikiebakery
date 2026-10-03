@@ -21,6 +21,10 @@ export async function createProductAction(_: ActionState, fd: FormData): Promise
   const result = await createProduct(session, fd);
   if ("error" in result) return result;
   revalidatePath("/", "layout");
+  // The /products/new page sends people on to the product it just created.
+  // The dialog on the products list sets no_redirect, because redirecting
+  // would navigate the page out from under the dialog.
+  if (fd.get("no_redirect")) return { ok: "Product added." };
   redirect(`/products/${result.id}`);
 }
 
