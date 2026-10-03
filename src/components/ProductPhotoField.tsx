@@ -1,16 +1,26 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { resizeImage } from "@/lib/resizeImage";
 import { productPhotoUrl } from "@/lib/types";
-import { btnSecondary, hintCls, labelCls } from "./ui";
+import type { ProductImageHit } from "@/app/api/product-images/route";
+import { Spinner, btnSecondary, hintCls, labelCls } from "./ui";
+
+const MIN_QUERY = 3;
+const DEBOUNCE_MS = 450;
 
 // The photo slot on the product form. Sends a hidden "photo" field with the
 // product form: "" = unchanged, "remove", or the resized image as a data URL.
+//
+// Typing a product name also searches the open product databases and offers
+// matching pictures, so most items can be given a photo without hunting for
+// one. Suggestions only appear while the slot is still empty.
 export default function ProductPhotoField({
   product,
+  productName = "",
 }: {
   product?: { id: number; photo_version: string | null };
+  productName?: string;
 }) {
   const existing = product ? productPhotoUrl(product) : null;
   const [preview, setPreview] = useState<string | null>(existing);
@@ -18,6 +28,36 @@ export default function ProductPhotoField({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+
+  const [suggestions, setSuggestions] = useState<ProductImageHit[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  const query = productName.trim();
+  // Nothing to suggest once a picture is chosen, or once they've closed the
+  // strip for this product.
+  const wantSuggestions = !dismissed && !preview && query.length >= MIN_QUERY;
+
+  useEffect(() => {
+    if (!wantSuggestions) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/product-images?q=${encodeURIComponent(query)}`);
+        const data: { results?: ProductImageHit[] } = await res.json();
+        if (!cancelled) setSuggestions(data.results ?? []);
+      } catch {
+        if (!cancelled) setSuggestions([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [wantSuggestions, query]);
 
   async function choose(file: File | undefined) {
     if (!file) return;
@@ -32,6 +72,25 @@ export default function ProductPhotoField({
     } finally {
       setBusy(false);
       if (input.current) input.current.value = "";
+    }
+  }
+
+  // A suggested picture goes through the same resize as an uploaded one, so
+  // what gets stored is a small local copy, not a link to someone else's site.
+  async function pick(hit: ProductImageHit) {
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch(hit.image);
+      if (!res.ok) throw new Error("fetch failed");
+      const blob = await res.blob();
+      const dataUrl = await resizeImage(new File([blob], "photo", { type: blob.type || "image/jpeg" }));
+      setPreview(dataUrl);
+      setValue(dataUrl);
+    } catch {
+      setError("Couldn't use that picture. Try another one, or upload your own.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -74,6 +133,50 @@ export default function ProductPhotoField({
           )}
         </div>
       </div>
+
+      {wantSuggestions && (searching || suggestions.length > 0) && (
+        <div className="mt-3 animate-slide-down rounded-lg border border-line bg-slate-50 p-3">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-muted">
+              {searching ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Spinner className="h-3 w-3" />
+                  Looking for pictures of &ldquo;{query}&rdquo;…
+                </span>
+              ) : (
+                <>Pictures found for &ldquo;{query}&rdquo; — click one to use it</>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setDismissed(true)}
+              className="shrink-0 text-xs text-muted hover:text-ink hover:underline"
+            >
+              Hide
+            </button>
+          </div>
+          {suggestions.length > 0 && (
+            <ul className="flex gap-2 overflow-x-auto pb-1">
+              {suggestions.map((hit) => (
+                <li key={hit.image} className="shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => pick(hit)}
+                    disabled={busy}
+                    title={hit.brand ? `${hit.name} — ${hit.brand}` : hit.name}
+                    className="block w-24 overflow-hidden rounded-md border border-line bg-white p-1 text-left transition hover:border-brand hover:shadow disabled:opacity-50"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- remote thumbnail, not a site asset */}
+                    <img src={hit.thumb} alt={hit.name} loading="lazy" className="h-20 w-full object-contain" />
+                    <span className="mt-1 block truncate text-[11px] leading-tight text-muted">{hit.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <p className={hintCls}>
         A clear photo helps staff find the right item at the register. On a phone you can take the picture
         directly.

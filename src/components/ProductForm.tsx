@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createProductAction, updateProductAction } from "@/app/products/actions";
 import type { Category, Product } from "@/lib/types";
 import { Spinner, btnPrimary, hintCls, inputCls, labelCls } from "./ui";
@@ -19,17 +19,26 @@ export default function ProductForm({
     product ? updateProductAction : createProductAction,
     {}
   );
+  // Held here rather than in the input alone, so the photo field can offer
+  // pictures matching whatever is being typed.
+  const [name, setName] = useState(product?.name ?? "");
 
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
       {product && <input type="hidden" name="id" value={product.id} />}
 
       <div className="sm:col-span-2">
-        <ProductPhotoField product={product} />
+        <ProductPhotoField product={product} productName={name} />
       </div>
       <div className="sm:col-span-2">
         <label className={labelCls}>Product name</label>
-        <input name="name" required defaultValue={product?.name} className={inputCls} />
+        <input
+          name="name"
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className={inputCls}
+        />
       </div>
       <div>
         <label className={labelCls}>Barcode</label>
