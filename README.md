@@ -31,8 +31,20 @@ after the Gemellus Cashflow repo.
 - **Inventory** (`/inventory`) — stock levels with low/out status, restock,
   spoilage and count corrections; every change is a stock movement.
 - **Products** (`/products`) — catalog with barcode, SKU, cost, SRP, margin.
+- **Import from Excel** (`/products/import`) — download the product sheet (every
+  product plus blank rows, with category and Yes/No dropdowns), edit it in Excel or
+  Google Sheets, upload it, check the preview (new / updated / skipped rows), then
+  save. Rows match existing products by exact name, then barcode, then SKU; new
+  categories are created; SRP changes go to the SRP history and Audit Log. Stock
+  of existing products is never changed by an import (use Inventory).
 - **Audit Log** (`/audit-log`) — filter by price changes, sales & voids, credit,
   stock, sign-ins.
+- **Full backup** (Audit Log page, owner only) — every table as a sheet in one
+  Excel file (no product photos, no PIN hashes). Each download is logged.
+- **Phones and tablets** — below laptop width the sidebar becomes a ☰ menu, and the
+  Register shows a "View sale" button that jumps to the order. The site can be
+  added to a home screen (web app manifest, gold "M" icon).
+- **Register shortcuts** — F2 search, F4 cash received, F9 complete sale, Esc clear search.
 
 ## Reports, staff and statements
 
@@ -42,7 +54,8 @@ after the Gemellus Cashflow repo.
   voids, discounts, profit. Printable.
 - **Sales Report** (`/reports/sales`) — any date range (presets: today, 7/14/30 days,
   this month): totals, a day-by-day chart, by category, best sellers, by payment
-  method; **Excel downloads** (CSV) of sales or of every item sold.
+  method; **Download Excel report** — one styled workbook (navy title banners,
+  totals rows, peso formatting) with a Summary sheet, every sale, and every item sold.
 - **Dashboard** — adds a 14-day sales chart.
 - **Credit aging** — "Owed for" on Credit Accounts (amber past 30 days, red past 60),
   and a printable **statement of account** per customer (`/customers/[id]/statement`)

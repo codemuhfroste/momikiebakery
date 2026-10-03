@@ -58,6 +58,7 @@ body {
   --animate-flash: flash 0.7s ease-out backwards;
   --animate-shake: shake 0.4s ease-in-out;
   --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-drawer-in: drawer-in 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 
   @keyframes page-in {
     from { opacity: 0; transform: translateY(6px); }
@@ -97,6 +98,10 @@ body {
     0%, 100% { transform: translateX(0); }
     20%, 60% { transform: translateX(-6px); }
     40%, 80% { transform: translateX(6px); }
+  }
+  @keyframes drawer-in {
+    from { transform: translateX(-100%); }
+    to { transform: none; }
   }
   @keyframes shimmer {
     from { background-position: 200% 0; }

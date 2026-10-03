@@ -19,6 +19,8 @@ const ACTION_LABELS: Record<string, { label: string; tone: "neutral" | "good" | 
   "product.cost_change": { label: "Cost changed", tone: "info" },
   "product.create": { label: "Product added", tone: "neutral" },
   "product.update": { label: "Product edited", tone: "neutral" },
+  "product.import": { label: "Excel import", tone: "info" },
+  "backup.download": { label: "Backup downloaded", tone: "neutral" },
   "sale.create": { label: "Sale", tone: "neutral" },
   "sale.void": { label: "Sale voided", tone: "bad" },
   "sale.offline_flag": { label: "Mobile sale to check", tone: "warn" },
@@ -64,6 +66,12 @@ export default async function AuditLogPage({ searchParams }: PageProps<"/audit-l
       <PageHeader
         title="Audit Log"
         subtitle="A permanent record of who did what and when. Entries cannot be edited or deleted."
+        actions={
+          // A plain link: the browser downloads the file. Owner-only, like this page.
+          <a href="/api/backup" className={btnSecondary} title="Every sale, product, customer and record in one Excel file">
+            Download full backup (Excel)
+          </a>
+        }
       />
       <form className="mb-4 flex flex-wrap items-end gap-3">
         <input type="hidden" name="filter" value={filter} />

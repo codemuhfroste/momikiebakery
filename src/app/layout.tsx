@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/AppShell";
@@ -12,7 +12,11 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "Momikie's POS",
   description: "Point-of-sale system for Momikie's General Merchandise",
+  appleWebApp: { title: "Momikie's POS", statusBarStyle: "black-translucent" },
 };
+
+// Colours the phone's status bar to match the navy menu bar.
+export const viewport: Viewport = { themeColor: "#0f1d3d" };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const session = await getSession();

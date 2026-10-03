@@ -23,6 +23,9 @@ export default async function ProductsPage() {
                 Find missing photos ({missingPhotos})
               </Link>
             )}
+            <Link href="/products/import" className={btnSecondary}>
+              Import from Excel
+            </Link>
             <CategoriesButton categories={categories} className={btnSecondary} />
             <ProductDialogButton categories={categories} className={btnPrimary}>
               + Add product

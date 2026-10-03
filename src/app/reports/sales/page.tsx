@@ -9,7 +9,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const addDays = (d: string, n: number) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86400_000).toISOString().slice(0, 10);
 
 // Sales for any date range: totals, a day-by-day chart, and breakdowns by
-// category, product and payment method — with Excel (CSV) downloads.
+// category, product and payment method — with a styled Excel download.
 export default async function SalesReportPage({ searchParams }: PageProps<"/reports/sales">) {
   await requireManagerOrRedirect();
   const params = await searchParams;
@@ -40,11 +40,8 @@ export default async function SalesReportPage({ searchParams }: PageProps<"/repo
         subtitle={from === to ? `Sales on ${formatDate(from)}.` : `Sales from ${formatDate(from)} to ${formatDate(to)}.`}
         actions={
           <>
-            <a href={`/api/reports/export?${q}&kind=sales`} className={btnSecondary}>
-              Download sales (Excel)
-            </a>
-            <a href={`/api/reports/export?${q}&kind=items`} className={btnPrimary}>
-              Download items sold (Excel)
+            <a href={`/api/reports/export?${q}`} className={btnPrimary}>
+              Download Excel report
             </a>
           </>
         }

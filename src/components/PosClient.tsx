@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useEffectEvent, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { checkoutAction } from "@/app/pos/actions";
 import { attachBarcodeAction } from "@/app/products/actions";
@@ -80,6 +80,7 @@ export default function PosClient({
   // when the same product is added twice in a row.
   const [flash, setFlash] = useState<{ id: number; n: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const cashRef = useRef<HTMLInputElement>(null);
 
   const q = query.trim().toLowerCase();
   const results = (q
@@ -207,10 +208,39 @@ export default function PosClient({
     });
   }
 
+  // Keyboard shortcuts for a cashier at a keyboard: F2 search, F4 cash
+  // received, F9 complete the sale. Off while the unknown-barcode prompt is up.
+  const onShortcut = useEffectEvent((e: KeyboardEvent) => {
+    if (unknownCode || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === "F2") {
+      e.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    } else if (e.key === "F4") {
+      e.preventDefault();
+      if (method !== "Cash") selectMethod("Cash");
+      // The cash field appears once Cash is selected; focus it after render.
+      setTimeout(() => {
+        cashRef.current?.focus();
+        cashRef.current?.select();
+      }, 0);
+    } else if (e.key === "F9") {
+      e.preventDefault();
+      if (canPay && !pending) checkout();
+    }
+  });
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => onShortcut(e);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
+
+  const itemCount = cart.reduce((n, l) => n + l.qty, 0);
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_25rem]">
       {/* Product picker */}
-      <section className="min-w-0">
+      <section className={`min-w-0 ${cart.length > 0 ? "pb-16 lg:pb-0" : ""}`}>
         <div className="mb-4">
           <label className={labelCls} htmlFor="pos-search">
             Find a product
@@ -223,6 +253,9 @@ export default function PosClient({
               if (e.key === "Enter") {
                 e.preventDefault();
                 handleSearchEnter();
+              } else if (e.key === "Escape" && query) {
+                e.preventDefault();
+                setQuery("");
               }
             }}
             placeholder="Type a product name, or scan its barcode"
@@ -274,7 +307,7 @@ export default function PosClient({
       </section>
 
       {/* Order summary */}
-      <aside className="flex h-fit flex-col rounded-lg border border-line bg-surface shadow-sm lg:sticky lg:top-[calc(var(--banner-h)+1.5rem)]">
+      <aside id="pos-cart" className="flex h-fit scroll-mt-28 flex-col rounded-lg border border-line bg-surface shadow-sm lg:sticky lg:top-[calc(var(--banner-h)+1.5rem)]">
         {lastSale && (
           <div role="status" className="animate-slide-down rounded-t-lg border-b border-emerald-200 bg-emerald-50 px-5 py-4">
             <div className="flex items-start justify-between gap-3">
@@ -453,9 +486,14 @@ export default function PosClient({
           {method === "Cash" && (
             <div className="grid animate-slide-down grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Cash received</label>
+                <label className={labelCls} htmlFor="pos-cash">
+                  Cash received
+                </label>
                 <input
+                  id="pos-cash"
+                  ref={cashRef}
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   step="0.01"
                   value={tendered}
@@ -513,8 +551,25 @@ export default function PosClient({
               Exact amount received
             </button>
           )}
+          <p className="hidden text-center text-xs text-muted lg:block">
+            Shortcuts: <Kbd>F2</Kbd> search · <Kbd>F4</Kbd> cash received · <Kbd>F9</Kbd> complete sale · <Kbd>Esc</Kbd> clear search
+          </p>
         </div>
       </aside>
+
+      {/* Phones: the order panel sits below the products, so keep the total in
+          reach with a button that jumps down to it. */}
+      {cart.length > 0 && (
+        <a
+          href="#pos-cart"
+          className="fixed inset-x-4 bottom-4 z-20 flex animate-slide-down items-center justify-between rounded-lg bg-brand px-4 py-3 text-sm font-semibold text-white shadow-lg active:scale-[0.98] lg:hidden print:hidden"
+        >
+          <span>
+            View sale · {formatQty(itemCount)} item{itemCount === 1 ? "" : "s"}
+          </span>
+          <span className="tabular-nums">{formatCurrency(total)}</span>
+        </a>
+      )}
 
       {unknownCode && (
         <UnknownBarcodeModal
@@ -719,4 +774,8 @@ function UnknownBarcodeModal({
       </DialogPanel>
     </div>
   );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="rounded border border-line bg-slate-50 px-1 py-px font-mono text-[10px] text-ink">{children}</kbd>;
 }
