@@ -4,12 +4,13 @@ import { listSalesBetween } from "@/lib/queries";
 import { formatCurrency, formatDate, formatQty, formatTime, manilaDayRange, manilaToday } from "@/lib/format";
 import { CREDIT_STATUS_LABELS, creditPaymentStatus } from "@/lib/types";
 import { Badge, Card, EmptyState, PageHeader, Stat, Table, Tabs, btnSecondary, inputCls } from "@/components/ui";
+import VoidSaleButton from "@/components/VoidSaleButton";
 
 const FILTERS = ["all", "credit", "overrides", "voided"] as const;
 type Filter = (typeof FILTERS)[number];
 
 export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
-  await requireSessionOrRedirect();
+  const session = await requireSessionOrRedirect();
   const params = await searchParams;
   const date =
     typeof params.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : manilaToday();
@@ -32,6 +33,10 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
   const onCredit = valid.reduce((sum, s) => sum + s.credit_amount, 0);
   const overrideCount = all.filter((s) => s.override_count > 0).length;
   const q = (f: string) => `/sales?date=${date}${f === "all" ? "" : `&filter=${f}`}`;
+  // Voiding is owner-only, and a receipt with credit already paid against it
+  // has to be settled with the customer first (see processVoid).
+  const canVoid = session.role === "owner";
+  const isVoidable = (s: (typeof rows)[number]) => canVoid && !s.voided_at && s.credit_paid <= 0.004;
 
   return (
     <>
@@ -86,6 +91,11 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                 <th>Payment</th>
                 <th className="text-right">Total</th>
                 <th>Notes</th>
+                {canVoid && (
+                  <th className="text-right">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -113,6 +123,18 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                     {s.override_count > 0 && <Badge tone="warn">Price changed</Badge>}
                     {s.voided_at && <Badge tone="bad">Voided</Badge>}
                   </td>
+                  {canVoid && (
+                    <td className="text-right">
+                      {isVoidable(s) && (
+                        <VoidSaleButton
+                          saleId={s.id}
+                          receiptNo={s.receipt_no}
+                          total={formatCurrency(s.total)}
+                          isCredit={s.credit_amount > 0}
+                        />
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

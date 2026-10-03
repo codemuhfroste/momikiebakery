@@ -73,7 +73,7 @@ export default function LoginScreen({ role, error }: { role: LoginRole; error?: 
             Momikie&apos;s General Merchandise
           </p>
           <p className="mt-4 text-base text-white/80">
-            All in one sales and management system for Momikie&apos;s General Merchandise.
+            All in one sales, credit and inventory management.
           </p>
         </div>
 
