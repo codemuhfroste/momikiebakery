@@ -70,7 +70,7 @@ export default function LoginScreen({ role, error }: { role: LoginRole; error?: 
 
         <div className="relative hidden max-w-md animate-rise-in [animation-delay:120ms] lg:block">
           <p className="text-4xl font-bold leading-tight tracking-tight">
-            POS (Point of Sale System) With Credit Tracking
+            Momikie&apos;s General Merchandise
           </p>
           <p className="mt-4 text-base text-white/80">
             All in one sales and management system for Momikie&apos;s General Merchandise.
