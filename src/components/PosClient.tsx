@@ -64,6 +64,17 @@ export default function PosClient({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [unknownCode, setUnknownCode] = useState<string | null>(null);
+  // The sale just rung up. The register clears itself for the next customer
+  // instead of navigating to the receipt, so this carries the one thing the
+  // cashier still needs from it: the change to hand back.
+  const [lastSale, setLastSale] = useState<{
+    saleId: number;
+    receiptNo: string;
+    method: PaymentMethod;
+    change: number;
+    creditAmount: number;
+    customerName: string | null;
+  } | null>(null);
   // Bumped on every add so the tile flash and notice animation replay even
   // when the same product is added twice in a row.
   const [flash, setFlash] = useState<{ id: number; n: number } | null>(null);
@@ -80,6 +91,7 @@ export default function PosClient({
 
   function addProduct(product: PosProduct, barcode: string | null = null) {
     setNotice(null);
+    setLastSale(null);
     setFlash((f) => ({ id: product.id, n: (f?.n ?? 0) + 1 }));
     setCart((prev) => {
       const existing = prev.find((l) => l.product.id === product.id);
@@ -167,8 +179,30 @@ export default function PosClient({
         amountTendered: tenderedValue,
         customerId: isCredit ? customerId : null,
       });
-      if ("error" in result) setError(result.error);
-      else router.push(`/sales/${result.saleId}?new=1`);
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+      setLastSale({
+        saleId: result.saleId,
+        receiptNo: result.receiptNo,
+        method,
+        change: isCredit ? 0 : change,
+        creditAmount,
+        customerName: customer?.name ?? null,
+      });
+      // Clear down for the next customer in line.
+      setCart([]);
+      setDiscount(0);
+      setMethod("Cash");
+      setTendered("");
+      setCustomerId(null);
+      setQuery("");
+      setNotice(null);
+      setError(null);
+      searchRef.current?.focus();
+      // Stock just changed, so refresh the figures the next sale is based on.
+      router.refresh();
     });
   }
 
@@ -240,6 +274,44 @@ export default function PosClient({
 
       {/* Order summary */}
       <aside className="flex h-fit flex-col rounded-lg border border-line bg-surface shadow-sm lg:sticky lg:top-6">
+        {lastSale && (
+          <div role="status" className="animate-slide-down rounded-t-lg border-b border-emerald-200 bg-emerald-50 px-5 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-emerald-900">Sale complete</p>
+                <p className="text-xs text-emerald-800">Receipt {lastSale.receiptNo}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLastSale(null)}
+                aria-label="Dismiss"
+                className="-mr-2 -mt-1 rounded p-1.5 text-emerald-700 transition hover:bg-emerald-100"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+            {lastSale.method === "Cash" && lastSale.change > 0.004 && (
+              <p className="mt-2 flex items-baseline gap-2 text-emerald-900">
+                <span className="text-sm">Give change</span>
+                <span className="text-2xl font-bold tabular-nums">{formatCurrency(lastSale.change)}</span>
+              </p>
+            )}
+            {lastSale.creditAmount > 0.004 && (
+              <p className="mt-2 text-sm text-emerald-900">
+                <strong className="tabular-nums">{formatCurrency(lastSale.creditAmount)}</strong> charged to{" "}
+                {lastSale.customerName}&apos;s account.
+              </p>
+            )}
+            <p className="mt-2 text-xs text-emerald-800">
+              Ready for the next customer ·{" "}
+              <Link href={`/sales/${lastSale.saleId}`} className="font-medium underline">
+                Open receipt
+              </Link>
+            </p>
+          </div>
+        )}
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <h2 className="text-sm font-semibold text-ink">
             Current sale{cart.length > 0 && <span className="font-normal text-muted"> · {cart.length} item(s)</span>}
