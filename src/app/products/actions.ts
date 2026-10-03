@@ -6,7 +6,7 @@ import { canManage, getSession } from "@/lib/rbac";
 import { isUniqueFailure, readBatch, runBatch, stmt } from "@/lib/db";
 import { auditStmt } from "@/lib/audit";
 import { normalizeBarcode } from "@/lib/barcode";
-import { createProduct, updateProduct } from "@/lib/products";
+import { createProduct, setProductPhoto, updateProduct } from "@/lib/products";
 import { createCategory, deleteCategory, renameCategory } from "@/lib/categories";
 import type { ActionState } from "@/lib/actionState";
 import type { Product } from "@/lib/types";
@@ -97,4 +97,18 @@ export async function deleteCategoryAction(_: ActionState, fd: FormData): Promis
   const result = await deleteCategory(session, Number(fd.get("id")));
   if (result.ok) revalidatePath("/", "layout");
   return result;
+}
+
+// Saves one photo chosen on the "Find missing photos" page. Called once per
+// product so a long list shows progress and one failure doesn't stop the rest.
+export async function setProductPhotoAction(productId: number, dataUrl: string, source: string): Promise<ActionState> {
+  const session = await managerOnly();
+  if (!session) return { error: "Only the owner can change products." };
+  const result = await setProductPhoto(session, productId, dataUrl, source.slice(0, 80));
+  return result;
+}
+
+// Called once at the end, so the lists everywhere show the new photos.
+export async function refreshAfterPhotosAction(): Promise<void> {
+  if (await managerOnly()) revalidatePath("/", "layout");
 }

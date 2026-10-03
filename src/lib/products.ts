@@ -166,3 +166,29 @@ export async function updateProduct(actor: Actor, fd: FormData): Promise<{ error
   }
   return { ok: "Saved." };
 }
+
+// Sets just the photo of a product (the "Find missing photos" page). `source`
+// says where it came from, for the Audit Log.
+export async function setProductPhoto(
+  actor: Actor,
+  productId: number,
+  dataUrl: string,
+  source?: string
+): Promise<{ error?: string; ok?: string }> {
+  const photo = parsePhotoField(dataUrl);
+  if ("error" in photo) return photo;
+  if (photo.kind !== "set") return { error: "No photo to save." };
+  const [[product]] = await readBatch<[{ name: string }[]]>([stmt`SELECT name FROM products WHERE id = ${productId}`]);
+  if (!product) return { error: "That product no longer exists." };
+  await runBatch([
+    ...photoStatements(productId, photo),
+    auditStmt({
+      actorName: actor.name,
+      actorRole: actor.role,
+      action: "product.update",
+      summary: `Added a photo to ${product.name}${source ? ` (${source})` : ""}`,
+      details: { productId, source },
+    }),
+  ]);
+  return { ok: "Saved." };
+}

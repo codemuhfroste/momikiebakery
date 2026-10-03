@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireManagerOrRedirect } from "@/lib/rbac";
 import { listCategories, listProducts } from "@/lib/queries";
 import ProductDialogButton from "@/components/ProductDialogButton";
@@ -8,6 +9,7 @@ import { Card, EmptyState, PageHeader, btnPrimary, btnSecondary } from "@/compon
 export default async function ProductsPage() {
   await requireManagerOrRedirect();
   const [products, categories] = await Promise.all([listProducts(), listCategories()]);
+  const missingPhotos = products.filter((p) => p.is_active && !p.photo_version).length;
 
   return (
     <>
@@ -16,6 +18,11 @@ export default async function ProductsPage() {
         subtitle="Everything the store sells, grouped by category. SRP is the Suggested Retail Price — the normal selling price used at the register. Changes to an SRP are recorded in the Audit Log."
         actions={
           <>
+            {missingPhotos > 0 && (
+              <Link href="/products/photos" className={btnSecondary}>
+                Find missing photos ({missingPhotos})
+              </Link>
+            )}
             <CategoriesButton categories={categories} className={btnSecondary} />
             <ProductDialogButton categories={categories} className={btnPrimary}>
               + Add product
