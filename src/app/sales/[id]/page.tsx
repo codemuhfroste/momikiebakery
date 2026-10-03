@@ -105,6 +105,11 @@ export default async function SaleDetailPage({ params, searchParams }: PageProps
           )}
         </dl>
         <p className="mt-5 text-center text-xs text-muted">Thank you for shopping at Momikie&apos;s!</p>
+        {/* This system isn't BIR-accredited, so its printouts are not official
+            invoices; the registered booklet invoice is the tax document. */}
+        <p className="mt-2 text-center text-[10px] font-semibold uppercase tracking-wide text-muted">
+          This document is not valid for claim of input tax.
+        </p>
       </Card>
 
       {isCredit && !sale.voided_at && (

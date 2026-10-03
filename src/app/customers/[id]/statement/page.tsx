@@ -165,6 +165,7 @@ export default async function StatementPage({ params }: PageProps<"/customers/[i
 
         <footer className="mt-8 border-t border-line pt-4 text-center text-xs text-muted">
           Please settle your balance at the store. Thank you for your continued patronage!
+          <div className="mt-2 font-semibold uppercase tracking-wide">This document is not valid for claim of input tax.</div>
         </footer>
       </article>
     </>
