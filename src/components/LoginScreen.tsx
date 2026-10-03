@@ -2,9 +2,9 @@ import { loginAction } from "@/app/actions";
 import { isRelaxedLogin, type LoginRole } from "@/lib/auth";
 import SubmitButton from "./SubmitButton";
 
-// Background video for the brand panel (public/vidbg.mp4). Set to null to
-// show the plain green background instead.
-const LOGIN_VIDEO_SRC: string | null = "/vidbg.mp4";
+// Background video for the brand panel (public/newbgmomikie.mp4). Set to null
+// to show the plain green background instead.
+const LOGIN_VIDEO_SRC: string | null = "/newbgmomikie.mp4";
 
 const ERRORS: Record<string, string> = {
   "1": "That PIN isn't right. Please try again.",

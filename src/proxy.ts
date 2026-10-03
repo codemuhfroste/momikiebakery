@@ -28,7 +28,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Skips the login pages, Next.js assets, and files from public/ (paths
-  // ending in a file extension, e.g. /vidbg.mp4) so the login page's video
+  // ending in a file extension, e.g. /newbgmomikie.mp4) so the login page's video
   // loads for signed-out visitors. The dot is written as [.] — a bare "."
   // would match any character and skip the guard on every page.
   matcher: ["/((?!login|owner|_next/static|_next/image|favicon.ico|.*[.][A-Za-z0-9]+$).*)"],
