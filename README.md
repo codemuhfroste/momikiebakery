@@ -47,6 +47,11 @@ after the Gemellus Cashflow repo.
   kg; the cart line then holds the kg, to the gram. Receipts show
   "0.35 kg × ₱80.00/kg". Things sold by count (calamansi, eggs) stay by the
   piece. Set it on the product form or the Excel sheet's "Sold by" column.
+- **For the invoice booklet** (on End of Day) — this system is not BIR-registered,
+  so its printouts are only supplementary receipts ("not valid for claim of input
+  tax"). End of Day lists each sale of ₱500 or more (one booklet invoice each) and
+  the total of the smaller sales for one summary invoice when it goes over ₱500.
+  The threshold rule lives in `src/lib/invoiceRules.ts`.
 - **Expenses** (`/expenses`) — money paid out for the store: flour and other
   ingredients, supplies, utilities, rent, wages. Owner and staff record them
   (what for, amount, date, category, how paid, supplier); only the owner edits

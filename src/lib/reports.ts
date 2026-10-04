@@ -3,6 +3,7 @@
 // in UTC, so "+8 hours" turns it into the local date.
 import { readBatch, stmt } from "./db";
 import { manilaDayRange, round2 } from "./format";
+import { INVOICE_THRESHOLD, needsOwnInvoice } from "./invoiceRules";
 
 const MANILA_DAY = `strftime('%Y-%m-%d', created_at, '+8 hours')`;
 
@@ -32,6 +33,13 @@ export interface DaySummary {
   cashExpected: number; // what should be in the drawer from today's activity
   expensesFromDrawer: number; // cash taken out of the drawer to pay expenses
   expensesTotal: number; // every expense dated today, however paid
+  // For the store's BIR-registered invoice booklet (see invoiceRules.ts).
+  invoicing: {
+    bigSales: { id: number; receipt_no: string; created_at: string; total: number; payment_method: string; customer_name: string | null }[];
+    smallCount: number;
+    smallTotal: number;
+    summaryNeeded: boolean; // the small sales add up to more than the threshold
+  };
   firstSaleAt: string | null;
   lastSaleAt: string | null;
 }
@@ -74,6 +82,16 @@ export async function getDaySummary(date: string): Promise<DaySummary> {
          FROM expenses WHERE spent_on = ${date}`,
   ]);
 
+  const [daySales] = await readBatch<[DaySummary["invoicing"]["bigSales"]]>([
+    stmt`SELECT s.id, s.receipt_no, s.created_at, s.total, s.payment_method, c.name AS customer_name
+         FROM sales s LEFT JOIN customers c ON c.id = s.customer_id
+         WHERE s.voided_at IS NULL AND s.created_at >= ${start} AND s.created_at < ${end}
+         ORDER BY s.created_at`,
+  ]);
+  const bigSales = daySales.filter((x) => needsOwnInvoice(x.total));
+  const small = daySales.filter((x) => !needsOwnInvoice(x.total));
+  const smallTotal = round2(small.reduce((t, x) => t + x.total, 0));
+
   const cashSales = byMethod.find((m) => m.method === "Cash")?.total ?? 0;
   const cashPayments = payments.find((m) => m.method === "Cash")?.total ?? 0;
   return {
@@ -95,6 +113,12 @@ export async function getDaySummary(date: string): Promise<DaySummary> {
     cashExpected: round2(cashSales + credit.down + cashPayments - spent.drawer),
     expensesFromDrawer: round2(spent.drawer),
     expensesTotal: round2(spent.total),
+    invoicing: {
+      bigSales,
+      smallCount: small.length,
+      smallTotal,
+      summaryNeeded: smallTotal > INVOICE_THRESHOLD + 0.004,
+    },
     firstSaleAt: totals.first,
     lastSaleAt: totals.last,
   };

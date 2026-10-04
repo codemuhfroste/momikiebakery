@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireManagerOrRedirect } from "@/lib/rbac";
 import { getDaySummary } from "@/lib/reports";
 import { formatCurrency, formatDate, formatQty, formatTime, manilaToday } from "@/lib/format";
+import { INVOICE_AT_THRESHOLD, INVOICE_THRESHOLD } from "@/lib/invoiceRules";
 import { Card, CardHeader, PageHeader, Stat, Table, btnSecondary, inputCls } from "@/components/ui";
 import CashCount from "@/components/CashCount";
 import PrintButton from "@/components/PrintButton";
@@ -49,6 +50,69 @@ export default async function EndOfDayPage({ searchParams }: PageProps<"/reports
         <Stat label="Gross profit" value={formatCurrency(profit)} hint="Sales minus the cost of items sold" />
         <Stat label="Put on credit (utang)" value={formatCurrency(s.creditCharged)} hint="Added to customer balances" />
       </div>
+
+      <Card className="mb-6">
+        <CardHeader
+          title="For the invoice booklet"
+          description="This system's printouts are not invoices. Write these in the store's BIR-registered invoice booklet, and also write one for any customer who asks."
+        />
+        <div className="grid gap-6 p-5 lg:grid-cols-[3fr_2fr]">
+          <div className="min-w-0">
+            <h3 className="mb-2 text-sm font-semibold">
+              Sales of {formatCurrency(INVOICE_THRESHOLD)}
+              {INVOICE_AT_THRESHOLD ? " or more" : " and up"} — one invoice each
+            </h3>
+            {s.invoicing.bigSales.length === 0 ? (
+              <p className="text-sm text-muted">None today.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-muted">
+                      <th className="py-1.5 pr-3 font-medium">Receipt</th>
+                      <th className="py-1.5 pr-3 font-medium">Time</th>
+                      <th className="py-1.5 pr-3 font-medium">Customer</th>
+                      <th className="py-1.5 pr-3 font-medium">Paid by</th>
+                      <th className="py-1.5 text-right font-medium">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {s.invoicing.bigSales.map((x) => (
+                      <tr key={x.id}>
+                        <td className="py-1.5 pr-3">
+                          <Link href={`/sales/${x.id}`} className="text-brand hover:underline">
+                            {x.receipt_no}
+                          </Link>
+                        </td>
+                        <td className="whitespace-nowrap py-1.5 pr-3">{formatTime(x.created_at)}</td>
+                        <td className="py-1.5 pr-3">{x.customer_name ?? "—"}</td>
+                        <td className="py-1.5 pr-3">{x.payment_method === "Credit" ? "Credit (utang)" : x.payment_method}</td>
+                        <td className="py-1.5 text-right font-medium tabular-nums">{formatCurrency(x.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div className="rounded-md border border-line p-4">
+            <h3 className="text-sm font-semibold">Summary invoice for the smaller sales</h3>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">{formatCurrency(s.invoicing.smallTotal)}</p>
+            <p className="text-sm text-muted">
+              {s.invoicing.smallCount} sale{s.invoicing.smallCount === 1 ? "" : "s"} under {formatCurrency(INVOICE_THRESHOLD)}
+            </p>
+            <p className={`mt-3 text-sm font-medium ${s.invoicing.summaryNeeded ? "text-amber-800" : "text-muted"}`}>
+              {s.invoicing.summaryNeeded
+                ? `Over ${formatCurrency(INVOICE_THRESHOLD)}: write one summary invoice for ${formatCurrency(s.invoicing.smallTotal)}.`
+                : `Not over ${formatCurrency(INVOICE_THRESHOLD)}: no summary invoice needed for today.`}
+            </p>
+          </div>
+        </div>
+        <p className="border-t border-line px-5 py-3 text-xs text-muted">
+          Voided sales are left out. Credit (utang) sales are included on the day they were made. These rules are the store&apos;s
+          understanding and are still to be confirmed with the bookkeeper.
+        </p>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
