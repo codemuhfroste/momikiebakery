@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireSessionOrRedirect } from "@/lib/rbac";
+import { canManage, requireSessionOrRedirect } from "@/lib/rbac";
 import { listSalesBetween } from "@/lib/queries";
 import { formatCurrency, formatDate, formatQty, formatTime, manilaDayRange, manilaToday } from "@/lib/format";
 import { CREDIT_STATUS_LABELS, creditPaymentStatus } from "@/lib/types";
@@ -35,7 +35,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
   const q = (f: string) => `/sales?date=${date}${f === "all" ? "" : `&filter=${f}`}`;
   // Voiding is owner-only, and a receipt with credit already paid against it
   // has to be settled with the customer first (see processVoid).
-  const canVoid = session.role === "owner";
+  const canVoid = canManage(session);
   const isVoidable = (s: (typeof rows)[number]) => canVoid && !s.voided_at && s.credit_paid <= 0.004;
 
   return (

@@ -6,6 +6,7 @@ import '../core/format.dart';
 import '../core/models.dart';
 import '../core/nav.dart';
 import '../core/theme.dart';
+import '../widgets/common.dart';
 import '../widgets/shell.dart';
 import '../widgets/web.dart';
 
@@ -177,6 +178,7 @@ class _SalesScreenState extends State<SalesScreen> {
                     Col('Payment'),
                     Col('Total', right: true),
                     Col('Notes', flex: 2),
+                    Col(''),
                   ],
                   // A receipt opens the website's receipt page (items, void, print).
                   onRowTap: (i) => appNav.go('sales', path: '/sales/${rows[i].id}'),
@@ -220,31 +222,126 @@ class _SalesScreenState extends State<SalesScreen> {
           decoration: s.voided ? TextDecoration.lineThrough : null,
         ),
       ),
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            children: [
-              if (credit != null) WebBadge('Credit · ${credit.$1}', tone: credit.$2),
-              if (s.overrideCount > 0) const WebBadge('Price changed', tone: Tone.warn),
-              if (s.voided) const WebBadge('Voided', tone: Tone.bad),
-              if (s.priceType == 'wholesale') const WebBadge('Wholesale', tone: Tone.info),
-              if (s.source == 'mobile') const WebBadge('Mobile app', tone: Tone.info),
-            ],
-          ),
-          if (s.syncNote != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 260),
-                child: Text('⚠ Check: ${s.syncNote}', style: const TextStyle(fontSize: 12, color: Brand.amber800)),
+      _notes(s, credit),
+      // Like the website: voidable unless already voided or (partly) paid.
+      s.voided || s.creditPaid > 0.004
+          ? const SizedBox.shrink()
+          : InkWell(
+              onTap: () => _void(s),
+              borderRadius: BorderRadius.circular(4),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  'Void',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Brand.red600),
+                ),
               ),
             ),
-        ],
-      ),
     ];
+  }
+
+  Future<void> _void(ServerSale s) async {
+    final done = await showWebDialog<bool>(
+      context,
+      title: 'Void receipt ${s.receiptNo}?',
+      description:
+          'This cancels the ${peso(s.total)} sale and returns its items to stock${s.creditAmount > 0 ? ", and removes the charge from the customer's account" : ''}. It can\'t be undone.',
+      body: (_) => _VoidForm(sale: s),
+    );
+    if (done == true && mounted) showMessage(context, 'Receipt ${s.receiptNo} voided. Its items are back in stock.');
+  }
+
+  Widget _notes(ServerSale s, (String, Tone)? credit) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [
+            if (credit != null) WebBadge('Credit · ${credit.$1}', tone: credit.$2),
+            if (s.overrideCount > 0) const WebBadge('Price changed', tone: Tone.warn),
+            if (s.voided) const WebBadge('Voided', tone: Tone.bad),
+            if (s.priceType == 'wholesale') const WebBadge('Wholesale', tone: Tone.info),
+            if (s.source == 'mobile') const WebBadge('Mobile app', tone: Tone.info),
+          ],
+        ),
+        if (s.syncNote != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 260),
+              child: Text('⚠ Check: ${s.syncNote}', style: const TextStyle(fontSize: 12, color: Brand.amber800)),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The reason box and the red Void button (VoidSaleButton on the website).
+class _VoidForm extends StatefulWidget {
+  const _VoidForm({required this.sale});
+  final ServerSale sale;
+  @override
+  State<_VoidForm> createState() => _VoidFormState();
+}
+
+class _VoidFormState extends State<_VoidForm> {
+  final _reason = TextEditingController();
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_reason.text.trim().isEmpty) return setState(() => _error = 'Give a reason for the void.');
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final error = await AppScope.read(context).voidSale(widget.sale, _reason.text);
+    if (!mounted) return;
+    if (error != null) {
+      setState(() {
+        _busy = false;
+        _error = error;
+      });
+    } else {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const FieldLabel('Reason'),
+        TextField(
+          controller: _reason,
+          autofocus: true,
+          style: tSm,
+          textCapitalization: TextCapitalization.sentences,
+          onSubmitted: (_) => _submit(),
+          decoration: const InputDecoration(hintText: 'e.g. Wrong item rung up'),
+        ),
+        if (_error != null) ...[const SizedBox(height: 12), NoticeBox(tone: Tone.bad, child: Text(_error!))],
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            WebButton('Keep it', kind: BtnKind.secondary, onPressed: () => Navigator.of(context).pop()),
+            const SizedBox(width: 8),
+            WebButton('Void sale', kind: BtnKind.danger, busy: _busy, onPressed: _submit),
+          ],
+        ),
+      ],
+    );
   }
 }

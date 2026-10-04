@@ -6,7 +6,7 @@ import type { ActionState } from "@/lib/actionState";
 import { Spinner, btnDanger, btnSecondary, inputCls, labelCls } from "./ui";
 import DialogPanel from "./DialogPanel";
 
-// Void straight from the transactions table, so the owner doesn't have to open
+// Void straight from the transactions table, so nobody has to open
 // every receipt. Same server action as the one on the receipt page, which is
 // where the guards live (already voided, credit already paid, stock restored
 // exactly once).

@@ -368,6 +368,23 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     if (recentReceipts.length > 50) recentReceipts = recentReceipts.sublist(0, 50);
   }
 
+  /// Voids a recorded sale on the server (needs the internet), then reloads
+  /// the day's sales and the stock and balances it changed. Returns why it
+  /// failed, or null.
+  Future<String?> voidSale(ServerSale sale, String reason) async {
+    try {
+      await api.voidSale(sale.id, reason.trim());
+    } on ApiException catch (e) {
+      if (e.network) _setOnline(false);
+      return e.network ? "You're offline. Voiding needs the internet — try again when the tablet is back online." : e.message;
+    }
+    try {
+      await _refreshCatalog();
+    } on ApiException catch (_) {}
+    await refreshServerSales();
+    return null;
+  }
+
   /// Adds a credit customer on the server (needs the internet) and reloads
   /// the customer list. Returns the new customer, or why it failed.
   Future<(Customer?, String?)> addCustomer({

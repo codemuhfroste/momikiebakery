@@ -57,6 +57,10 @@ class Api {
   Future<Json> sales(String date) async =>
       await _send(() => _client.get(_uri('/sales', {'date': date}), headers: _headers)) as Json;
 
+  /// Voids a recorded sale (reason required).
+  Future<void> voidSale(int saleId, String reason) async =>
+      await _send(() => _client.post(_uri('/void'), headers: _headers, body: jsonEncode({'saleId': saleId, 'reason': reason})));
+
   /// Adds a credit customer; returns {id}.
   Future<Json> createCustomer(Json customer) async =>
       await _send(() => _client.post(_uri('/customers'), headers: _headers, body: jsonEncode(customer))) as Json;

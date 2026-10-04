@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireSessionOrRedirect } from "@/lib/rbac";
+import { canManage, requireSessionOrRedirect } from "@/lib/rbac";
 import { getSale, getSaleCreditPayments } from "@/lib/queries";
 import { CREDIT_STATUS_LABELS, creditPaymentStatus, lineQuantityText } from "@/lib/types";
 import { formatCurrency, formatDateTime, formatQty } from "@/lib/format";
@@ -157,7 +157,7 @@ export default async function SaleDetailPage({ params, searchParams }: PageProps
           </Notice>
         </div>
       ) : (
-        session.role === "owner" && (
+        canManage(session) && (
           <Card className="mx-auto mt-6 max-w-md print:hidden">
             <CardHeader
               title="Void this sale"
