@@ -40,6 +40,13 @@ after the Gemellus Cashflow repo.
   flagged as a price change if charged other than the wholesale price. Receipts
   show "2 boxes of 24 × ₱240.00"; Transactions mark wholesale sales; the Sales
   Report and its Excel file split retail and wholesale.
+- **Sold by weight (kg)** — a product can be sold by the piece (the default) or
+  by weight. For a kg product (vegetables, meat…) the SRP and cost are per kg
+  and stock is counted in kg. At the Register, tapping or scanning it asks for
+  the weight from the scale, or a peso amount ("₱50 worth") that works out the
+  kg; the cart line then holds the kg, to the gram. Receipts show
+  "0.35 kg × ₱80.00/kg". Things sold by count (calamansi, eggs) stay by the
+  piece. Set it on the product form or the Excel sheet's "Sold by" column.
 - **Import from Excel** (`/products/import`) — download the product sheet (every
   product plus blank rows, with category and Yes/No dropdowns), edit it in Excel or
   Google Sheets, upload it, check the preview (new / updated / skipped rows), then

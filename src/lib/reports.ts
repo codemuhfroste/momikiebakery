@@ -61,7 +61,7 @@ export async function getDaySummary(date: string): Promise<DaySummary> {
          FROM sales WHERE voided_at >= ${start} AND voided_at < ${end}`,
   ]);
   const [[items]] = await readBatch<[{ qty: number; cost: number; overrides: number }[]]>([
-    stmt`SELECT COALESCE(SUM(i.qty), 0) AS qty, COALESCE(SUM(i.unit_cost * i.qty), 0) AS cost,
+    stmt`SELECT COALESCE(SUM(CASE WHEN i.unit = 'kg' AND i.packs IS NULL THEN 1 ELSE i.qty END), 0) AS qty, COALESCE(SUM(i.unit_cost * i.qty), 0) AS cost,
                 COALESCE(SUM(CASE WHEN ABS(i.unit_price - i.srp) > 0.004 THEN 1 ELSE 0 END), 0) AS overrides
          FROM sale_items i JOIN sales s ON s.id = i.sale_id
          WHERE s.voided_at IS NULL AND s.created_at >= ${start} AND s.created_at < ${end}`,
@@ -183,7 +183,7 @@ export async function getSalesExportRows(from: string, to: string, kind: "sales"
     const [rows] = await readBatch<[Record<string, unknown>[]]>([
       stmt`SELECT s.receipt_no, s.created_at, s.voided_at, i.name, COALESCE(c.name, 'Uncategorized') AS category,
                   i.barcode, i.qty, i.srp, i.unit_price, i.line_total, i.unit_cost,
-                  i.packs, i.pack_name, i.pack_size, i.pack_price, s.price_type
+                  i.packs, i.pack_name, i.pack_size, i.pack_price, i.unit, s.price_type
            FROM sale_items i JOIN sales s ON s.id = i.sale_id
            LEFT JOIN products p ON p.id = i.product_id LEFT JOIN categories c ON c.id = p.category_id
            WHERE s.created_at >= ${start} AND s.created_at < ${end}
@@ -196,6 +196,7 @@ export async function getSalesExportRows(from: string, to: string, kind: "sales"
                 s.subtotal, s.discount, s.total, s.amount_tendered, s.credit_amount, s.voided_at, s.void_reason,
                 s.source, s.sync_note, s.price_type,
                 (SELECT GROUP_CONCAT(CASE WHEN packs IS NOT NULL THEN printf('%g %s x %s', packs, pack_name, name)
+                                          WHEN unit = 'kg' THEN printf('%g kg %s', qty, name)
                                           ELSE printf('%g x %s', qty, name) END, '; ')
                  FROM sale_items WHERE sale_id = s.id) AS items
          FROM sales s LEFT JOIN customers cu ON cu.id = s.customer_id

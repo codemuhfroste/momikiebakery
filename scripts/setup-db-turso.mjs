@@ -206,6 +206,10 @@ const addedColumns = [
   ["sale_items", "pack_name", "TEXT"],
   ["sale_items", "pack_size", "REAL"],
   ["sale_items", "pack_price", "REAL"],
+  // Sold by weight: 'kg' products (vegetables, meat…) are rung up by the kilo
+  // — stock, quantities and SRP are then in kg / per kg. 'piece' otherwise.
+  ["products", "unit", "TEXT NOT NULL DEFAULT 'piece'"],
+  ["sale_items", "unit", "TEXT"],
 ];
 for (const [table, column, type] of addedColumns) {
   const { rows } = await db.execute(`PRAGMA table_info(${table})`);

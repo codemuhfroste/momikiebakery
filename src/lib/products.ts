@@ -62,6 +62,7 @@ function readFields(fd: FormData) {
     barcode: barcodeRaw ? normalizeBarcode(barcodeRaw) : null,
     srp: money(fd, "srp"),
     cost: money(fd, "cost") ?? 0,
+    unit: fd.get("unit") === "kg" ? "kg" : "piece",
     reorderLevel: Number(fd.get("reorder_level")) || 0,
   };
 }
@@ -85,11 +86,11 @@ export async function createProduct(actor: Actor, fd: FormData): Promise<{ error
       ...category.pre,
       {
         sql: `INSERT INTO products (sku, barcode, name, category_id, srp, cost, stock_qty, reorder_level, photo_version,
-                                    pack_name, pack_size, wholesale_price)
-              VALUES (?, ?, ?, ${category.id.sql}, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    pack_name, pack_size, wholesale_price, unit)
+              VALUES (?, ?, ?, ${category.id.sql}, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [f.sku, f.barcode, f.name, ...category.id.args, f.srp, f.cost,
                Number(fd.get("stock_qty")) || 0, f.reorderLevel, photo.kind === "set" ? photo.version : null,
-               ws.packName, ws.packSize, ws.wholesalePrice],
+               ws.packName, ws.packSize, ws.wholesalePrice, f.unit],
       },
       stmt`INSERT INTO price_history (product_id, old_srp, new_srp, actor_name)
            VALUES (last_insert_rowid(), ${null}, ${f.srp}, ${actor.name})`,
@@ -101,7 +102,7 @@ export async function createProduct(actor: Actor, fd: FormData): Promise<{ error
         actorName: actor.name,
         actorRole: actor.role,
         action: "product.create",
-        summary: `Added product ${f.name} (SRP ₱${f.srp.toFixed(2)}${
+        summary: `Added product ${f.name} (SRP ₱${f.srp.toFixed(2)}${f.unit === "kg" ? " per kg" : ""}${
           ws.packName ? `; wholesale ₱${ws.wholesalePrice!.toFixed(2)} per ${ws.packName} of ${ws.packSize}` : ""
         })${photo.kind === "set" ? " with photo" : ""}`,
         details: { sku: f.sku, barcode: f.barcode },
@@ -137,11 +138,11 @@ export async function updateProduct(actor: Actor, fd: FormData): Promise<{ error
     {
       sql: `UPDATE products SET sku = ?, barcode = ?, name = ?, category_id = ${category.id.sql},
               srp = ?, cost = ?, reorder_level = ?, is_active = ?,
-              pack_name = ?, pack_size = ?, wholesale_price = ?,
+              pack_name = ?, pack_size = ?, wholesale_price = ?, unit = ?,
               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
             WHERE id = ?`,
       args: [f.sku, barcode, name, ...category.id.args, srp, cost, f.reorderLevel, fd.get("is_active") ? 1 : 0,
-             ws.packName, ws.packSize, ws.wholesalePrice, id],
+             ws.packName, ws.packSize, ws.wholesalePrice, f.unit, id],
     },
   ];
   const wsText = (p: { pack_name: string | null; pack_size: number | null; wholesale_price: number | null }) =>
@@ -188,6 +189,16 @@ export async function updateProduct(actor: Actor, fd: FormData): Promise<{ error
         action: "product.update",
         summary: photo.kind === "set" ? `Updated the photo of ${name}` : `Removed the photo of ${name}`,
         details: { productId: id },
+      })
+    );
+  }
+  if ((before.unit ?? "piece") !== f.unit) {
+    batch.push(
+      auditStmt({
+        ...who,
+        action: "product.update",
+        summary: `${name} is now sold ${f.unit === "kg" ? "by weight (per kg)" : "by the piece"}`,
+        details: { productId: id, unit: f.unit },
       })
     );
   }

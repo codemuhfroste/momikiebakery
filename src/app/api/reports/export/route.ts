@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
   const is = wb.addWorksheet("Items sold");
   const itemCols = [
     { header: "Receipt" }, { header: "Date & time", kind: "date" as const }, { header: "Product", width: 32 }, { header: "Category" },
-    { header: "Barcode" }, { header: "Sold as" }, { header: "Qty (pieces)", kind: "qty" as const },
+    { header: "Barcode" }, { header: "Sold as" }, { header: "Qty (pieces or kg)", kind: "qty" as const },
     { header: "List price", kind: "peso" as const }, { header: "Price charged", kind: "peso" as const }, { header: "Line total", kind: "peso" as const },
     { header: "Cost", kind: "peso" as const }, { header: "Profit", kind: "peso" as const }, { header: "Status" },
   ];
@@ -133,16 +133,20 @@ export async function GET(request: NextRequest) {
       return [
         r.receipt_no as string, manilaExcelDate(r.created_at as string), r.name as string, r.category as string,
         r.barcode as string,
-        r.packs != null ? `${r.packs} ${packPlural(String(r.pack_name), Number(r.packs))} of ${r.pack_size}` : "Piece",
+        r.packs != null
+          ? `${r.packs} ${packPlural(String(r.pack_name), Number(r.packs))} of ${r.pack_size}${r.unit === "kg" ? " kg" : ""}`
+          : r.unit === "kg"
+            ? "By weight (kg)"
+            : "Piece",
         Number(r.qty),
-        // Per pack for a pack line, per piece otherwise.
+        // Per pack for a pack line, per piece (or kg) otherwise.
         r.packs != null ? Number(r.srp) * Number(r.pack_size) : Number(r.srp),
         r.packs != null ? Number(r.pack_price) : Number(r.unit_price),
         r.voided_at ? null : line,
         r.voided_at ? null : cost, r.voided_at ? null : Math.round((line - cost) * 100) / 100, r.voided_at ? "Voided" : "",
       ];
     }),
-    { totals: ["Qty (pieces)", "Line total", "Cost", "Profit"] }
+    { totals: ["Qty (pieces or kg)", "Line total", "Cost", "Profit"] }
   );
 
   const name = `momikie-sales-${from}${from === to ? "" : `-to-${to}`}.xlsx`;

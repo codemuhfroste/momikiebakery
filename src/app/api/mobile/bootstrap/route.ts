@@ -14,7 +14,7 @@ export async function GET(request: Request) {
       [Record<string, unknown>[], Record<string, unknown>[], { now: string }[], { collected: number }[]]
     >([
       stmt`SELECT p.id, p.name, p.sku, p.barcode, p.srp, p.stock_qty, p.reorder_level, p.photo_version,
-                  p.pack_name, p.pack_size, p.wholesale_price,
+                  p.pack_name, p.pack_size, p.wholesale_price, p.unit,
                   c.name AS category_name
            FROM products p LEFT JOIN categories c ON c.id = p.category_id
            WHERE p.is_active = 1 ORDER BY p.name COLLATE NOCASE`,

@@ -45,6 +45,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _cartKey = GlobalKey();
   final List<CartLine> _cart = [];
   final Map<String, TextEditingController> _priceText = {}; // by line key
+  final Map<String, TextEditingController> _kgText = {}; // weighed lines, by line key
 
   (String, bool)? _notice; // text, ok
   (int, int)? _flash; // product id, counter (replays the flash)
@@ -108,7 +109,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onHardwareKey);
-    for (final c in [_search, _discount, _tendered, ..._priceText.values]) {
+    for (final c in [_search, _discount, _tendered, ..._priceText.values, ..._kgText.values]) {
       c.dispose();
     }
     _scroll.dispose();
@@ -125,6 +126,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     HapticFeedback.selectionClick();
     // Wholesale: products with a pack are added by the pack.
     final byPack = _wholesale && p.hasWholesale;
+    // Sold by weight: ask for the kg first.
+    if (p.byWeight && !byPack) {
+      _askWeight(p);
+      return;
+    }
     setState(() {
       _lastSale = null;
       _printStatus = null;
@@ -132,13 +138,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _flash = (p.id, (_flash?.$2 ?? 0) + 1);
       final line = _cart.where((l) => l.product.id == p.id && l.byPack == byPack).firstOrNull ?? CartLine(p, 0, byPack: byPack);
       if (line.qty + 1 > _maxQty(line)) {
-        _notice = ('Not enough stock for ${byPack ? 'another ${p.packLabel}' : 'another'} ${p.name} (${qty(p.stockQty)} left).', false);
+        _notice = (
+          'Not enough stock for ${byPack ? 'another ${p.packLabel}' : 'another'} ${p.name} (${qty(p.stockQty)}${p.byWeight ? ' kg' : ''} left).',
+          false,
+        );
         return;
       }
       line.qty += 1;
       if (!_cart.contains(line)) _cart.add(line);
     });
   }
+
+  /// The weight prompt for a product sold by the kilo; adds what's entered.
+  Future<void> _askWeight(Product p) async {
+    final inCart = _cart.where((l) => l.product.id == p.id).fold<double>(0, (n, l) => n + l.pieces);
+    final free = round3(p.stockQty - inCart);
+    final kg = await showWebDialog<double>(
+      context,
+      title: p.name,
+      description: '${peso(p.srp)} / kg · ${qty(math.max(0, free))} kg in stock',
+      body: (_) => _WeightForm(product: p, inStock: free),
+    );
+    if (kg == null || !mounted) return;
+    setState(() {
+      _lastSale = null;
+      _printStatus = null;
+      _notice = ('Added ${qty(kg)} kg ${p.name}', true);
+      _flash = (p.id, (_flash?.$2 ?? 0) + 1);
+      final line = _cart.where((l) => l.product.id == p.id && !l.byPack).firstOrNull ?? CartLine(p, 0);
+      line.qty = round3(line.qty + kg);
+      if (!_cart.contains(line)) _cart.add(line);
+      _kgText[_key(line)]?.text = qty(line.qty);
+    });
+  }
+
+  TextEditingController _kgFor(CartLine l) => _kgText.putIfAbsent(_key(l), () => TextEditingController(text: qty(l.qty)));
 
   /// The most of this line the stock allows, given the product's other lines.
   double _maxQty(CartLine line) {
@@ -154,6 +188,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final index = _cart.indexOf(line);
     if (index < 0) return;
     _priceText.remove(_key(line))?.dispose();
+    _kgText.remove(_key(line))?.dispose();
     final same = _cart.where((l) => l.product.id == line.product.id && l.byPack == byPack).firstOrNull;
     if (same != null) {
       same.qty += line.qty;
@@ -183,14 +218,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _remove(CartLine l) => setState(() {
     _cart.remove(l);
     _priceText.remove(_key(l))?.dispose();
+    _kgText.remove(_key(l))?.dispose();
   });
 
   void _clearCart() => setState(() {
     _cart.clear();
-    for (final c in _priceText.values) {
+    for (final c in [..._priceText.values, ..._kgText.values]) {
       c.dispose();
     }
     _priceText.clear();
+    _kgText.clear();
   });
 
   /// Enter in the search box — also where a USB/Bluetooth barcode scanner
@@ -353,7 +390,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            'View sale · ${qty(_cart.fold<double>(0, (s, l) => s + l.qty))} item${_cart.length == 1 && _cart.first.qty == 1 ? '' : 's'}',
+                            'View sale · ${qty(_cart.fold<double>(0, (s, l) => s + (l.weighed ? 1 : l.qty)))} item${_cart.length == 1 && (_cart.first.weighed || _cart.first.qty == 1) ? '' : 's'}',
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
                           ),
@@ -523,7 +560,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final creditAmount = _isCredit ? round2(total - _cashIn) : 0.0;
     final available = customer?.available;
     final overLimit = _isCredit && available != null && creditAmount > available + 0.004;
-    final canPay = _cart.isNotEmpty && (_isCredit ? customer != null && _cashIn < total && !overLimit : _tenderedValue >= total);
+    // Every line needs a quantity; a typed weight can't go over the stock.
+    final canPay =
+        _cart.isNotEmpty &&
+        _cart.every((l) => l.qty > 0) &&
+        !_cart.any((l) => l.weighed && l.qty > _maxQty(l) + 0.0005) &&
+        (_isCredit ? customer != null && _cashIn < total && !overLimit : _tenderedValue >= total);
     final overrides = _cart.where((l) => l.priceChanged).length;
 
     return Container(
@@ -893,6 +935,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _cartLine(CartLine l) {
     final changed = l.priceChanged;
+    final over = l.weighed && (l.qty <= 0 || l.qty > _maxQty(l) + 0.0005);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Column(
@@ -931,7 +974,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                      byPack ? 'By ${l.product.packName}' : 'By piece',
+                                      byPack ? 'By ${l.product.packName}' : (l.product.byWeight ? 'By kg' : 'By piece'),
                                       style: TextStyle(
                                         fontSize: 12,
                                         color: l.byPack == byPack ? Brand.navy : Brand.muted,
@@ -940,7 +983,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     ),
                                   ),
                                 ),
-                              if (l.byPack) Text('· ${l.product.packLabel} = ${qty(l.pieces)} pcs', style: tXs),
+                              if (l.byPack)
+                                Text('· ${l.product.packLabel} = ${qty(l.pieces)} ${l.product.byWeight ? 'kg' : 'pcs'}', style: tXs),
                             ],
                           ),
                         ),
@@ -957,27 +1001,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Brand.line),
-                  borderRadius: BorderRadius.circular(6),
+              if (l.weighed) ...[
+                SizedBox(
+                  width: 80,
+                  child: _smallInput(
+                    _kgFor(l),
+                    highlight: over,
+                    onChanged: (v) => setState(() => l.qty = round3(math.max(0, double.tryParse(v) ?? 0))),
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _stepButton('−', () => setState(() => l.qty = math.max(1, l.qty - 1))),
-                    SizedBox(
-                      width: 32,
-                      child: Text(
-                        qty(l.qty),
-                        textAlign: TextAlign.center,
-                        style: tSm.copyWith(fontFeatures: tabular),
+                const SizedBox(width: 6),
+                const Text('kg', style: tXs),
+              ] else
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Brand.line),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _stepButton('−', () => setState(() => l.qty = math.max(1, l.qty - 1))),
+                      SizedBox(
+                        width: 32,
+                        child: Text(
+                          qty(l.qty),
+                          textAlign: TextAlign.center,
+                          style: tSm.copyWith(fontFeatures: tabular),
+                        ),
                       ),
-                    ),
-                    _stepButton('+', () => setState(() => l.qty = math.max(l.qty, math.min(_maxQty(l), l.qty + 1)))),
-                  ],
+                      _stepButton('+', () => setState(() => l.qty = math.max(l.qty, math.min(_maxQty(l), l.qty + 1)))),
+                    ],
+                  ),
                 ),
-              ),
               const SizedBox(width: 8),
               const Text('at ₱', style: tXs),
               const SizedBox(width: 8),
@@ -986,6 +1042,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: _smallInput(_priceFor(l), highlight: changed, onChanged: (v) => _setPrice(l, double.tryParse(v) ?? 0)),
               ),
               if (l.byPack) ...[const SizedBox(width: 6), Text('/ ${l.product.packName}', style: tXs)],
+              if (l.weighed) ...[const SizedBox(width: 6), const Text('/ kg', style: tXs)],
               const SizedBox(width: 8),
               Expanded(
                 child: Align(
@@ -1010,7 +1067,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   WebBadge(l.byPack ? 'Not wholesale price' : 'Not SRP', tone: Tone.warn),
                   Text(
-                    l.byPack ? 'Wholesale is ${peso(l.listPrice)} / ${l.product.packName}.' : 'SRP is ${peso(l.listPrice)}.',
+                    l.byPack
+                        ? 'Wholesale is ${peso(l.listPrice)} / ${l.product.packName}.'
+                        : 'SRP is ${peso(l.listPrice)}${l.weighed ? ' / kg' : ''}.',
                     style: const TextStyle(fontSize: 12, color: Brand.amber800),
                   ),
                   InkWell(
@@ -1027,6 +1086,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ],
               ),
+            ),
+          if (l.weighed && l.qty > _maxQty(l) + 0.0005)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('Only ${qty(math.max(0, _maxQty(l)))} kg in stock.', style: const TextStyle(fontSize: 12, color: Brand.red600)),
             ),
         ],
       ),
@@ -1325,13 +1389,18 @@ class _ProductTileState extends State<_ProductTile> {
                                     TextSpan(
                                       text: ' / ${p.packName}',
                                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Brand.muted),
+                                    )
+                                  else if (p.byWeight)
+                                    const TextSpan(
+                                      text: ' / kg',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Brand.muted),
                                     ),
                                 ],
                               ),
                               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Brand.ink, fontFeatures: tabular),
                             ),
                             Text(
-                              out ? 'Out of stock' : '${qty(p.stockQty)} in stock',
+                              out ? 'Out of stock' : '${qty(p.stockQty)}${p.byWeight ? ' kg' : ''} in stock',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: out ? Brand.red600 : Brand.muted,
@@ -1368,6 +1437,128 @@ class _ProductTileState extends State<_ProductTile> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// What the scale shows (kg), or the peso amount the customer wants — then
+/// the kg is worked out. Pops with the kg to add.
+class _WeightForm extends StatefulWidget {
+  const _WeightForm({required this.product, required this.inStock});
+  final Product product;
+  final double inStock;
+  @override
+  State<_WeightForm> createState() => _WeightFormState();
+}
+
+class _WeightFormState extends State<_WeightForm> {
+  final _value = TextEditingController();
+  bool _byAmount = false;
+
+  @override
+  void dispose() {
+    _value.dispose();
+    super.dispose();
+  }
+
+  double get _kg {
+    final n = double.tryParse(_value.text.trim()) ?? 0;
+    if (n <= 0) return 0;
+    if (!_byAmount) return round3(n);
+    return widget.product.srp > 0 ? round3(n / widget.product.srp) : 0;
+  }
+
+  void _submit() {
+    final kg = _kg;
+    if (kg > 0 && kg <= widget.inStock + 0.0005) Navigator.of(context).pop(kg);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.product;
+    final kg = _kg;
+    final tooMuch = kg > widget.inStock + 0.0005;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(color: Brand.slate100, borderRadius: BorderRadius.circular(6)),
+          child: Row(
+            children: [
+              for (final amount in const [false, true])
+                Expanded(
+                  child: Material(
+                    color: _byAmount == amount ? Colors.white : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                    elevation: _byAmount == amount ? 1 : 0,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      onTap: () => setState(() {
+                        _byAmount = amount;
+                        _value.clear();
+                      }),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          amount ? 'Amount (₱)' : 'Weight (kg)',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: _byAmount == amount ? FontWeight.w500 : FontWeight.w400,
+                            color: _byAmount == amount ? Brand.ink : Brand.muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        FieldLabel(_byAmount ? 'How much the customer wants to buy' : 'Weight from the scale'),
+        TextField(
+          key: ValueKey(_byAmount),
+          controller: _value,
+          autofocus: true,
+          style: const TextStyle(fontSize: 18, color: Brand.ink, fontFeatures: tabular),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textInputAction: TextInputAction.done,
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _submit(),
+          decoration: InputDecoration(hintText: _byAmount ? 'e.g. 50.00' : 'e.g. 0.350', suffixText: _byAmount ? '₱' : 'kg'),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 20,
+          child: kg <= 0
+              ? null
+              : tooMuch
+              ? Text('Only ${qty(math.max(0, widget.inStock))} kg in stock.', style: const TextStyle(fontSize: 14, color: Brand.red600))
+              : Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '${qty(kg)} kg × ${peso(p.srp)} = '),
+                      TextSpan(
+                        text: peso(round2(kg * p.srp)),
+                        style: const TextStyle(fontWeight: FontWeight.w600, color: Brand.ink),
+                      ),
+                    ],
+                  ),
+                  style: tSm.copyWith(fontFeatures: tabular),
+                ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            WebButton('Cancel', kind: BtnKind.secondary, onPressed: () => Navigator.of(context).pop()),
+            const SizedBox(width: 8),
+            WebButton('Add to sale', onPressed: kg > 0 && !tooMuch ? _submit : null),
+          ],
+        ),
+      ],
     );
   }
 }

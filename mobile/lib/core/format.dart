@@ -6,9 +6,13 @@ final _dateTime = DateFormat('MMM d, h:mm a');
 
 String peso(num value) => _peso.format(value);
 
-/// Whole numbers without decimals ("3"), otherwise up to two ("1.5").
+/// Whole numbers without decimals ("3"), otherwise up to three — grams, for
+/// things sold by the kg ("1.5", "0.35").
 String qty(num value) =>
-    value == value.roundToDouble() ? value.toInt().toString() : value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '');
+    value == value.roundToDouble() ? value.toInt().toString() : value.toStringAsFixed(3).replaceAll(RegExp(r'0+$'), '');
+
+/// Kilos to the gram.
+double round3(num value) => (value * 1000).round() / 1000;
 
 /// The store runs on Philippine time (UTC+8, no daylight saving).
 DateTime manila(DateTime t) => t.toUtc().add(const Duration(hours: 8));

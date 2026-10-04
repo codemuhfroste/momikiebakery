@@ -37,7 +37,7 @@ export default async function StatementPage({ params }: PageProps<"/customers/[i
     days: daysSince(s.created_at) ?? 0,
     items: items
       .filter((i) => i.sale_id === s.id)
-      .map((i) => `${formatQty(i.qty)} × ${i.name}`)
+      .map((i) => (i.unit === "kg" && i.packs == null ? `${formatQty(i.qty)} kg ${i.name}` : `${formatQty(i.qty)} × ${i.name}`))
       .join(", "),
   }));
   const buckets = BUCKETS.map((b, i) => {

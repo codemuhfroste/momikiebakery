@@ -253,7 +253,7 @@ final receiptPrinter = ReceiptPrinter();
 class ReceiptLine {
   const ReceiptLine(this.name, this.detail, this.total);
   final String name;
-  final String detail; // "3 x 12.00" or "2 boxes of 24 x 240.00"
+  final String detail; // "3 x 12.00", "0.35 kg x 80.00" or "2 boxes of 24 x 240.00"
   final double total;
 }
 
@@ -292,11 +292,13 @@ class ReceiptData {
   final double creditAmount;
   final bool voided;
 
-  static String _detail(double qtyPieces, double unitPrice, {double? packs, String? packName, double? packSize, double? packPrice}) {
+  static String _detail(double qtyPieces, double unitPrice,
+      {double? packs, String? packName, double? packSize, double? packPrice, String? unit}) {
+    final kg = unit == 'kg' ? ' kg' : '';
     if (packs != null && packName != null && packSize != null && packPrice != null) {
-      return '${qty(packs)} ${packPlural(packName, packs)} of ${qty(packSize)} x ${_money(packPrice)}';
+      return '${qty(packs)} ${packPlural(packName, packs)} of ${qty(packSize)}$kg x ${_money(packPrice)}';
     }
-    return '${qty(qtyPieces)} x ${_money(unitPrice)}';
+    return '${qty(qtyPieces)}$kg x ${_money(unitPrice)}';
   }
 
   /// A sale rung up on this tablet.
@@ -311,7 +313,8 @@ class ReceiptData {
           for (final i in s.items)
             ReceiptLine(
               i.name,
-              _detail(i.qty, i.unitPrice, packs: i.packs, packName: i.packName, packSize: i.packSize, packPrice: i.packs == null ? null : i.unitPrice),
+              _detail(i.qty, i.unitPrice,
+                  packs: i.packs, packName: i.packName, packSize: i.packSize, packPrice: i.packs == null ? null : i.unitPrice, unit: i.unit),
               round2(i.unitPrice * (i.packs ?? i.qty)),
             ),
         ],
@@ -339,7 +342,11 @@ class ReceiptData {
           ReceiptLine(
             '${i['name']}',
             _detail(d(i['qty']), d(i['unitPrice']),
-                packs: dn(i['packs']), packName: i['packName'] as String?, packSize: dn(i['packSize']), packPrice: dn(i['packPrice'])),
+                packs: dn(i['packs']),
+                packName: i['packName'] as String?,
+                packSize: dn(i['packSize']),
+                packPrice: dn(i['packPrice']),
+                unit: i['unit'] as String?),
             d(i['lineTotal']),
           ),
       ],

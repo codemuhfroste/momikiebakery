@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { canManage, requireSessionOrRedirect } from "@/lib/rbac";
 import { getCreditItems, getCustomer, getLedger, getOpenCreditSales } from "@/lib/queries";
 import { formatCurrency, formatDate, formatDateTime, formatQty } from "@/lib/format";
-import { CREDIT_STATUS_LABELS, accountStatus, creditPaymentStatus, type CreditItem, lineQuantityText, packPlural } from "@/lib/types";
+import { CREDIT_STATUS_LABELS, accountStatus, creditPaymentStatus, type CreditItem, lineQuantityText, packPlural, unitSuffix } from "@/lib/types";
 import { Badge, Card, CardHeader, EmptyState, PageHeader, Stat, Tabs, tableCls, btnSecondary } from "@/components/ui";
 import CustomerForm from "@/components/CustomerForm";
 import CreditPaymentForm from "@/components/CreditPaymentForm";
@@ -28,7 +28,9 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
   // One-line summary per receipt for the payment form, e.g. "2 × Ensaymada, 1 × Sardines".
   const itemSummaries: Record<number, string> = {};
   for (const [saleId, items] of itemsBySale) {
-    itemSummaries[saleId] = items.map((i) => `${formatQty(i.qty)} × ${i.name}`).join(", ");
+    itemSummaries[saleId] = items
+      .map((i) => (i.unit === "kg" && i.packs == null ? `${formatQty(i.qty)} kg ${i.name}` : `${formatQty(i.qty)} × ${i.name}`))
+      .join(", ");
   }
 
   // Items still being paid for: on receipts that aren't voided or fully paid.
@@ -235,12 +237,12 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
                           <td className="text-right tabular-nums">
                             {i.packs != null && i.pack_name
                               ? `${formatQty(i.packs)} ${packPlural(i.pack_name, i.packs)}`
-                              : formatQty(i.qty)}
+                              : `${formatQty(i.qty)}${unitSuffix(i.unit)}`}
                           </td>
                           <td className="text-right tabular-nums">
                             {i.pack_price != null && i.pack_name
                               ? `${formatCurrency(i.pack_price)} / ${i.pack_name}`
-                              : formatCurrency(i.unit_price)}
+                              : `${formatCurrency(i.unit_price)}${i.unit === "kg" ? " / kg" : ""}`}
                           </td>
                           <td className={`px-4 py-2.5 text-right tabular-nums ${i.voided ? "line-through" : ""}`}>
                             {formatCurrency(i.line_total)}

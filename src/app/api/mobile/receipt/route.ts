@@ -34,6 +34,7 @@ export async function GET(request: Request) {
         packName: i.pack_name,
         packSize: i.pack_size,
         packPrice: i.pack_price,
+        unit: i.unit,
       })),
     });
   });

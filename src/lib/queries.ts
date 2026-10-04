@@ -71,7 +71,8 @@ export async function listSalesBetween(start: string, end: string): Promise<Sale
   const sql = getDb();
   return sql<SaleRow[]>`
     SELECT s.*,
-      (SELECT COALESCE(SUM(qty), 0) FROM sale_items i WHERE i.sale_id = s.id) AS item_count,
+      (SELECT COALESCE(SUM(CASE WHEN i.unit = 'kg' AND i.packs IS NULL THEN 1 ELSE i.qty END), 0)
+         FROM sale_items i WHERE i.sale_id = s.id) AS item_count,
       (SELECT COUNT(*) FROM sale_items i
         WHERE i.sale_id = s.id AND ABS(i.unit_price - i.srp) > 0.004) AS override_count,
       c.name AS customer_name,
@@ -161,7 +162,7 @@ export async function getCreditItems(customerId: number): Promise<CreditItem[]> 
     SELECT i.id AS item_id, s.id AS sale_id, s.receipt_no, s.created_at AS sale_date,
       (s.voided_at IS NOT NULL) AS voided, s.credit_amount,
       (SELECT COALESCE(SUM(a.amount), 0) FROM credit_allocations a WHERE a.sale_id = s.id) AS credit_paid,
-      i.name, i.qty, i.unit_price, i.line_total, i.packs, i.pack_name, i.pack_size, i.pack_price
+      i.name, i.qty, i.unit_price, i.line_total, i.packs, i.pack_name, i.pack_size, i.pack_price, i.unit
     FROM sale_items i JOIN sales s ON s.id = i.sale_id
     WHERE s.customer_id = ${customerId} AND s.credit_amount > 0
     ORDER BY s.created_at DESC, s.id DESC, i.id`;

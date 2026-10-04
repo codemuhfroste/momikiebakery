@@ -65,8 +65,9 @@ export function formatTime(iso: string | null | undefined): string {
   });
 }
 
+// Whole numbers as is; otherwise up to 3 decimals (grams, for kg: 0.35).
 export function formatQty(qty: number): string {
-  return Number.isInteger(qty) ? String(qty) : qty.toFixed(2).replace(/\.?0+$/, "");
+  return Number.isInteger(qty) ? String(qty) : qty.toFixed(3).replace(/\.?0+$/, "");
 }
 
 export function round2(n: number): number {

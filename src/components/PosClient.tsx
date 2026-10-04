@@ -8,7 +8,7 @@ import { attachBarcodeAction } from "@/app/products/actions";
 import { MIN_BARCODE_LENGTH, normalizeBarcode } from "@/lib/barcode";
 import { formatCurrency, formatQty, round2 } from "@/lib/format";
 import { useBarcodeScanner } from "@/lib/useBarcodeScanner";
-import { PAYMENT_METHODS, hasWholesale, packLabel, type PaymentMethod, type PriceType } from "@/lib/types";
+import { PAYMENT_METHODS, hasWholesale, packLabel, unitSuffix, type PaymentMethod, type PriceType } from "@/lib/types";
 import { Badge, Spinner, btnPrimary, btnSecondary, inputCls, labelCls } from "./ui";
 import DialogPanel from "./DialogPanel";
 import ProductThumb from "./ProductThumb";
@@ -23,6 +23,7 @@ export interface PosProduct {
   pack_name: string | null;
   pack_size: number | null;
   wholesale_price: number | null;
+  unit: string; // "kg": sold by weight — SRP per kg, stock in kg
   stock_qty: number;
   photo_version: string | null;
 }
@@ -48,6 +49,9 @@ interface CartLine {
 const lineKey = (l: CartLine) => `${l.product.id}:${l.byPack ? "pack" : "piece"}`;
 const listPrice = (p: PosProduct, byPack: boolean) => (byPack ? p.wholesale_price! : p.srp);
 const piecesOf = (l: CartLine) => (l.byPack ? l.qty * l.product.pack_size! : l.qty);
+// A line weighed on the scale: qty is in kg.
+const isWeighed = (l: CartLine) => l.product.unit === "kg" && !l.byPack;
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 // Changes a line's unit (piece ↔ pack), keeping the count and resetting the
 // price to the list price for the new unit; merges with a line already in
@@ -90,6 +94,8 @@ export default function PosClient({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [unknownCode, setUnknownCode] = useState<string | null>(null);
+  // A product sold by weight waiting for its kg (or peso amount).
+  const [weighing, setWeighing] = useState<{ product: PosProduct; barcode: string | null } | null>(null);
   // The sale just rung up. The register clears itself for the next customer
   // instead of navigating to the receipt, so this carries the one thing the
   // cashier still needs from it: the change to hand back.
@@ -116,19 +122,27 @@ export default function PosClient({
     : products
   ).slice(0, 48);
 
-  function addProduct(product: PosProduct, barcode: string | null = null) {
+  // Adds one of the product (or one pack). A product sold by weight first
+  // asks for its kg — then this returns false and the weight prompt adds it.
+  function addProduct(product: PosProduct, barcode: string | null = null, kg?: number): boolean {
+    // Wholesale: products with a pack are added by the pack.
+    const byPack = priceType === "wholesale" && hasWholesale(product);
+    if (product.unit === "kg" && !byPack && kg == null) {
+      setWeighing({ product, barcode });
+      return false;
+    }
     setNotice(null);
     setLastSale(null);
     setFlash((f) => ({ id: product.id, n: (f?.n ?? 0) + 1 }));
-    // Wholesale: products with a pack are added by the pack.
-    const byPack = priceType === "wholesale" && hasWholesale(product);
+    const add = byPack || kg == null ? 1 : kg;
     setCart((prev) => {
       const existing = prev.find((l) => l.product.id === product.id && l.byPack === byPack);
       if (existing) {
-        return prev.map((l) => (l === existing ? { ...l, qty: l.qty + 1 } : l));
+        return prev.map((l) => (l === existing ? { ...l, qty: round3(l.qty + add) } : l));
       }
-      return [...prev, { product, byPack, qty: 1, unitPrice: listPrice(product, byPack), barcode }];
+      return [...prev, { product, byPack, qty: add, unitPrice: listPrice(product, byPack), barcode }];
     });
+    return true;
   }
 
   // Switching the whole sale: lines that can be sold by the pack follow.
@@ -150,8 +164,7 @@ export default function PosClient({
     const code = normalizeBarcode(raw);
     const hit = products.find((p) => p.barcode === code || p.sku === code);
     if (hit) {
-      addProduct(hit, code);
-      setNotice({ tone: "ok", text: `Added ${hit.name}` });
+      if (addProduct(hit, code)) setNotice({ tone: "ok", text: `Added ${hit.name}` });
       setQuery("");
       searchRef.current?.focus();
     } else {
@@ -167,8 +180,7 @@ export default function PosClient({
     if (!q) return;
     if (products.some((p) => p.barcode === q || p.sku === q)) return handleCode(q);
     if (results.length === 1) {
-      addProduct(results[0]);
-      setNotice({ tone: "ok", text: `Added ${results[0].name}` });
+      if (addProduct(results[0])) setNotice({ tone: "ok", text: `Added ${results[0].name}` });
       setQuery("");
     } else if (/^\d+$/.test(q) && q.length >= MIN_BARCODE_LENGTH) {
       setUnknownCode(q);
@@ -192,8 +204,13 @@ export default function PosClient({
   const available = customer?.credit_limit == null ? null : round2(customer.credit_limit - customer.balance);
   const overLimit = isCredit && available != null && creditAmount > available + 0.004;
 
+  // A weighed line over the stock left (the stepper can't go over; a typed
+  // weight can).
+  const overStock = cart.filter((l) => isWeighed(l) && l.qty > maxQty(l) + 0.0005);
   const canPay =
     cart.length > 0 &&
+    cart.every((l) => l.qty > 0) &&
+    overStock.length === 0 &&
     (isCredit ? customer != null && cashIn < total && !overLimit : tenderedValue >= total);
 
   function selectMethod(m: PaymentMethod) {
@@ -261,7 +278,7 @@ export default function PosClient({
   // Keyboard shortcuts for a cashier at a keyboard: F2 search, F4 cash
   // received, F9 complete the sale. Off while the unknown-barcode prompt is up.
   const onShortcut = useEffectEvent((e: KeyboardEvent) => {
-    if (unknownCode || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (unknownCode || weighing || e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key === "F2") {
       e.preventDefault();
       searchRef.current?.focus();
@@ -285,7 +302,8 @@ export default function PosClient({
     return () => window.removeEventListener("keydown", listener);
   }, []);
 
-  const itemCount = cart.reduce((n, l) => n + l.qty, 0);
+  // A weighed line counts as one item, whatever it weighs.
+  const itemCount = cart.reduce((n, l) => n + (isWeighed(l) ? 1 : l.qty), 0);
   const wholesale = priceType === "wholesale";
 
   return (
@@ -350,11 +368,14 @@ export default function PosClient({
                         <span className="text-xs font-normal text-muted"> / {p.pack_name}</span>
                       </>
                     ) : (
-                      formatCurrency(p.srp)
+                      <>
+                        {formatCurrency(p.srp)}
+                        {p.unit === "kg" && <span className="text-xs font-normal text-muted"> / kg</span>}
+                      </>
                     )}
                   </span>
                   <span className={`whitespace-nowrap text-xs ${out ? "font-medium text-red-600" : "text-muted"}`}>
-                    {out ? "Out of stock" : `${formatQty(p.stock_qty)} in stock`}
+                    {out ? "Out of stock" : `${formatQty(p.stock_qty)}${unitSuffix(p.unit)} in stock`}
                   </span>
                 </span>
                 {wholesale && hasWholesale(p) && (
@@ -451,6 +472,8 @@ export default function PosClient({
             const list = listPrice(l.product, l.byPack);
             const changed = Math.abs(l.unitPrice - list) > 0.004;
             const packable = hasWholesale(l.product);
+            const weighed = isWeighed(l);
+            const kg = l.product.unit === "kg";
             return (
               <div key={lineKey(l)} className="animate-slide-in px-5 py-3">
                 <div className="flex items-start justify-between gap-2">
@@ -469,12 +492,12 @@ export default function PosClient({
                                 l.byPack === byPack ? "bg-brand-soft font-medium text-brand" : "text-muted hover:text-ink"
                               }`}
                             >
-                              {byPack ? `By ${l.product.pack_name}` : "By piece"}
+                              {byPack ? `By ${l.product.pack_name}` : kg ? "By kg" : "By piece"}
                             </button>
                           ))}
                           {l.byPack && (
                             <span className="text-muted">
-                              · {packLabel(l.product.pack_name!, l.product.pack_size!)} = {formatQty(piecesOf(l))} pcs
+                              · {packLabel(l.product.pack_name!, l.product.pack_size!)} = {formatQty(piecesOf(l))} {kg ? "kg" : "pcs"}
                             </span>
                           )}
                         </span>
@@ -491,6 +514,23 @@ export default function PosClient({
                   </button>
                 </div>
                 <div className="mt-2 flex items-center gap-2">
+                  {weighed ? (
+                    <span className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0.001}
+                        step="0.001"
+                        inputMode="decimal"
+                        aria-label={`Weight of ${l.product.name} in kg`}
+                        value={l.qty}
+                        onChange={(e) => updateLine(l, { qty: round3(Math.max(0, Number(e.target.value) || 0)) })}
+                        className={`w-20 rounded-md border px-2 py-1 text-sm tabular-nums ${
+                          l.qty <= 0 || l.qty > maxQty(l) + 0.0005 ? "border-red-400 bg-red-50" : "border-line"
+                        }`}
+                      />
+                      <span className="text-xs text-muted">kg</span>
+                    </span>
+                  ) : (
                   <div className="flex items-center rounded-md border border-line">
                     <button
                       type="button"
@@ -510,12 +550,13 @@ export default function PosClient({
                       +
                     </button>
                   </div>
+                  )}
                   <span className="text-xs text-muted">at ₱</span>
                   <input
                     type="number"
                     min={0}
                     step="0.01"
-                    aria-label={l.byPack ? `Price per ${l.product.pack_name}` : "Unit price"}
+                    aria-label={l.byPack ? `Price per ${l.product.pack_name}` : weighed ? "Price per kg" : "Unit price"}
                     value={l.unitPrice}
                     onChange={(e) => updateLine(l, { unitPrice: Number(e.target.value) })}
                     className={`w-20 rounded-md border px-2 py-1 text-sm tabular-nums transition-colors duration-200 ${
@@ -523,6 +564,7 @@ export default function PosClient({
                     }`}
                   />
                   {l.byPack && <span className="text-xs text-muted">/ {l.product.pack_name}</span>}
+                  {weighed && <span className="text-xs text-muted">/ kg</span>}
                   <span className="ml-auto text-sm font-semibold tabular-nums">
                     {formatCurrency(l.unitPrice * l.qty)}
                   </span>
@@ -530,11 +572,16 @@ export default function PosClient({
                 {changed && (
                   <div className="mt-1.5 flex animate-slide-down items-center gap-2 text-xs text-amber-800">
                     <Badge tone="warn">{l.byPack ? "Not wholesale price" : "Not SRP"}</Badge>
-                    {l.byPack ? `Wholesale is ${formatCurrency(list)} / ${l.product.pack_name}.` : `SRP is ${formatCurrency(list)}.`}
+                    {l.byPack
+                      ? `Wholesale is ${formatCurrency(list)} / ${l.product.pack_name}.`
+                      : `SRP is ${formatCurrency(list)}${weighed ? " / kg" : ""}.`}
                     <button type="button" className="underline" onClick={() => updateLine(l, { unitPrice: list })}>
                       {l.byPack ? "Use wholesale price" : "Use SRP"}
                     </button>
                   </div>
+                )}
+                {weighed && l.qty > maxQty(l) + 0.0005 && (
+                  <p className="mt-1.5 text-xs text-red-600">Only {formatQty(Math.max(0, maxQty(l)))} kg in stock.</p>
                 )}
               </div>
             );
@@ -685,14 +732,140 @@ export default function PosClient({
           products={products}
           onClose={() => setUnknownCode(null)}
           onAttached={(product) => {
-            addProduct(product, unknownCode);
-            setNotice({ tone: "ok", text: `Registered barcode and added ${product.name}` });
+            if (addProduct(product, unknownCode)) setNotice({ tone: "ok", text: `Registered barcode and added ${product.name}` });
             setUnknownCode(null);
             setQuery("");
             router.refresh();
           }}
         />
       )}
+
+      {weighing && (
+        <WeightModal
+          product={weighing.product}
+          inStock={round3(
+            weighing.product.stock_qty -
+              cart.filter((l) => l.product.id === weighing.product.id).reduce((n, l) => n + piecesOf(l), 0)
+          )}
+          onClose={() => {
+            setWeighing(null);
+            searchRef.current?.focus();
+          }}
+          onAdd={(kg) => {
+            const { product, barcode } = weighing;
+            setWeighing(null);
+            addProduct(product, barcode, kg);
+            setNotice({ tone: "ok", text: `Added ${formatQty(kg)} kg ${product.name}` });
+            setQuery("");
+            searchRef.current?.focus();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Weight prompt for a product sold by the kilo: type what the scale shows,
+// or the peso amount the customer wants (it works out the kg).
+function WeightModal({
+  product,
+  inStock,
+  onClose,
+  onAdd,
+}: {
+  product: PosProduct;
+  inStock: number;
+  onClose: () => void;
+  onAdd: (kg: number) => void;
+}) {
+  const [mode, setMode] = useState<"kg" | "amount">("kg");
+  const [value, setValue] = useState("");
+  const n = Number(value);
+  const kg = !value || !(n > 0) ? 0 : mode === "kg" ? round3(n) : product.srp > 0 ? round3(n / product.srp) : 0;
+  const total = round2(kg * product.srp);
+  const tooMuch = kg > inStock + 0.0005;
+  const ok = kg > 0 && !tooMuch;
+
+  return (
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-slate-900/50 p-4">
+      <DialogPanel label={`Weigh ${product.name}`} className="w-full max-w-sm animate-scale-in rounded-lg bg-surface p-6 shadow-xl">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (ok) onAdd(kg);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") onClose();
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <ProductThumb product={product} className="h-12 w-12" textClass="text-xs" />
+            <div>
+              <h2 className="text-lg font-semibold leading-tight">{product.name}</h2>
+              <p className="text-sm text-muted">
+                {formatCurrency(product.srp)} / kg · {formatQty(Math.max(0, inStock))} kg in stock
+              </p>
+            </div>
+          </div>
+          <div role="radiogroup" aria-label="Enter by" className="mt-4 grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-1 text-sm">
+            {(["kg", "amount"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={mode === m}
+                onClick={() => {
+                  setMode(m);
+                  setValue("");
+                }}
+                className={`rounded px-3 py-1.5 transition ${mode === m ? "bg-surface font-medium text-ink shadow-sm" : "text-muted hover:text-ink"}`}
+              >
+                {m === "kg" ? "Weight (kg)" : "Amount (₱)"}
+              </button>
+            ))}
+          </div>
+          <label className={`${labelCls} mt-4`} htmlFor="weigh-value">
+            {mode === "kg" ? "Weight from the scale" : "How much the customer wants to buy"}
+          </label>
+          <div className="relative">
+            <input
+              id="weigh-value"
+              key={mode}
+              autoFocus
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={mode === "kg" ? "0.001" : "0.01"}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={mode === "kg" ? "e.g. 0.350" : "e.g. 50.00"}
+              className={`${inputCls} pr-12 text-lg tabular-nums`}
+            />
+            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted">
+              {mode === "kg" ? "kg" : "₱"}
+            </span>
+          </div>
+          <p className="mt-3 min-h-5 text-sm tabular-nums" aria-live="polite">
+            {kg > 0 &&
+              (tooMuch ? (
+                <span className="text-red-600">Only {formatQty(Math.max(0, inStock))} kg in stock.</span>
+              ) : (
+                <>
+                  {formatQty(kg)} kg × {formatCurrency(product.srp)} ={" "}
+                  <span className="font-semibold text-ink">{formatCurrency(total)}</span>
+                </>
+              ))}
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className={btnSecondary}>
+              Cancel
+            </button>
+            <button type="submit" disabled={!ok} className={btnPrimary}>
+              Add to sale
+            </button>
+          </div>
+        </form>
+      </DialogPanel>
     </div>
   );
 }

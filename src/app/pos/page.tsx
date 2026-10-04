@@ -27,6 +27,7 @@ export default async function PosPage() {
           pack_name: p.pack_name,
           pack_size: p.pack_size,
           wholesale_price: p.wholesale_price,
+          unit: p.unit,
           stock_qty: p.stock_qty,
           photo_version: p.photo_version,
         }))}

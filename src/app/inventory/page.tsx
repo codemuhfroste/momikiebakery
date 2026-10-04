@@ -60,6 +60,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
               stock_qty: p.stock_qty,
               reorder_level: p.reorder_level,
               photo_version: p.photo_version,
+              unit: p.unit,
             }))}
           />
         )}

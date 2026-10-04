@@ -197,7 +197,8 @@ async function tryCheckout(
         pack: { packs, name: product.pack_name!, size, price, listPrice },
       });
     } else {
-      const qty = Number(item.qty);
+      // By weight: kg to the gram.
+      const qty = product.unit === "kg" ? Math.round(Number(item.qty) * 1000) / 1000 : Number(item.qty);
       const unitPrice = round2(Number(item.unitPrice));
       const lineTotal = round2(unitPrice * qty);
       qtyByProduct.set(product.id, (qtyByProduct.get(product.id) ?? 0) + qty);
@@ -216,7 +217,7 @@ async function tryCheckout(
   for (const [id, qty] of qtyByProduct) {
     const p = products.get(id)!;
     if (p.stock_qty < qty) {
-      if (!offline) return { error: `Not enough stock for ${p.name} (${p.stock_qty} left).` };
+      if (!offline) return { error: `Not enough stock for ${p.name} (${p.stock_qty}${p.unit === "kg" ? " kg" : ""} left).` };
       notes.push(`${p.name}: sold ${qty} with ${p.stock_qty} in stock`);
     }
   }
@@ -308,11 +309,12 @@ async function tryCheckout(
     batch.push(
       {
         sql: `INSERT INTO sale_items (sale_id, product_id, name, barcode, qty, srp, unit_price, unit_cost, line_total,
-                                      packs, pack_name, pack_size, pack_price)
-              VALUES (${saleId.sql}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                      packs, pack_name, pack_size, pack_price, unit)
+              VALUES (${saleId.sql}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [...saleId.args, l.product.id, l.product.name, l.barcode, l.qty, l.srp,
                l.unitPrice, l.product.cost, l.lineTotal,
-               l.pack?.packs ?? null, l.pack?.name ?? null, l.pack?.size ?? null, l.pack?.price ?? null],
+               l.pack?.packs ?? null, l.pack?.name ?? null, l.pack?.size ?? null, l.pack?.price ?? null,
+               l.product.unit === "kg" ? "kg" : null],
       },
       stmt`UPDATE products SET stock_qty = stock_qty - ${l.qty},
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ${l.product.id}`,

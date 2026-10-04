@@ -31,6 +31,8 @@ export default function ProductForm({
   // "__new" shows a box for typing a new category, created when the product
   // is saved (see categoryFor in lib/products.ts).
   const [categoryChoice, setCategoryChoice] = useState(String(product?.category_id ?? ""));
+  // "kg": sold by weight — prices and stock are then per kg.
+  const [unit, setUnit] = useState(product?.unit === "kg" ? "kg" : "piece");
 
   return (
     <form action={action} className="grid gap-4 sm:grid-cols-2">
@@ -93,13 +95,31 @@ export default function ProductForm({
           />
         )}
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div>
+        <label className={labelCls} htmlFor="unit">Sold by</label>
+        <select
+          id="unit"
+          name="unit"
+          value={unit}
+          onChange={(e) => setUnit(e.target.value === "kg" ? "kg" : "piece")}
+          className={inputCls}
+        >
+          <option value="piece">Piece (count) — bread, drinks, calamansi by the piece…</option>
+          <option value="kg">Weight (kg) — vegetables, meat, rice…</option>
+        </select>
+        <p className={hintCls}>
+          {unit === "kg"
+            ? "The Register asks for the weight (or a peso amount) each time. SRP and cost are per kg, and stock is counted in kg."
+            : "Sold by count. Choose Weight (kg) for things weighed on the scale."}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:col-span-2">
         <div>
-          <label className={labelCls}>SRP — selling price (₱)</label>
+          <label className={labelCls}>{unit === "kg" ? "SRP per kg (₱)" : "SRP — selling price (₱)"}</label>
           <input name="srp" type="number" step="0.01" min={0} required defaultValue={product?.srp} className={inputCls} />
         </div>
         <div>
-          <label className={labelCls}>Cost per item (₱)</label>
+          <label className={labelCls}>{unit === "kg" ? "Cost per kg (₱)" : "Cost per item (₱)"}</label>
           <input name="cost" type="number" step="0.01" min={0} defaultValue={product?.cost ?? 0} className={inputCls} />
         </div>
       </div>
@@ -148,12 +168,12 @@ export default function ProductForm({
       </fieldset>
       {!product && (
         <div>
-          <label className={labelCls}>Quantity on hand</label>
+          <label className={labelCls}>Quantity on hand{unit === "kg" ? " (kg)" : ""}</label>
           <input name="stock_qty" type="number" step="any" min={0} defaultValue={0} className={inputCls} />
         </div>
       )}
       <div>
-        <label className={labelCls}>Reorder level</label>
+        <label className={labelCls}>Reorder level{unit === "kg" ? " (kg)" : ""}</label>
         <input name="reorder_level" type="number" step="any" min={0} defaultValue={product?.reorder_level ?? 0} className={inputCls} />
         <p className={hintCls}>Marked “Low stock” when the quantity falls to this number.</p>
       </div>

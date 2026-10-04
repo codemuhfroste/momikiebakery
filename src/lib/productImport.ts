@@ -27,6 +27,7 @@ const COLUMNS = [
   { key: "packSize", header: "Pieces per unit" },
   { key: "wholesalePrice", header: "Wholesale price (₱)" },
   { key: "active", header: "Active (Yes/No)" },
+  { key: "unit", header: "Sold by (piece/kg)" },
 ] as const;
 type Key = (typeof COLUMNS)[number]["key"];
 const BLANK_ROWS = 200;
@@ -49,7 +50,7 @@ export async function buildTemplate(products: Product[], categories: Category[],
     .sort((a, b) => (a.category_name ?? "~").localeCompare(b.category_name ?? "~") || a.name.localeCompare(b.name))
     .map((p) => [
       p.name, p.category_name, p.barcode, p.sku, p.srp, p.cost, p.stock_qty, p.reorder_level,
-      p.pack_name, p.pack_size, p.wholesale_price, p.is_active ? "Yes" : "No",
+      p.pack_name, p.pack_size, p.wholesale_price, p.is_active ? "Yes" : "No", p.unit === "kg" ? "kg" : "piece",
     ]);
   // Room to type new products straight under the existing ones.
   for (let i = 0; i < BLANK_ROWS; i++) rows.push(COLUMNS.map(() => null));
@@ -95,6 +96,7 @@ export async function buildTemplate(products: Product[], categories: Category[],
       };
     }
     sheet.getCell(r, 12).dataValidation = { type: "list", allowBlank: true, formulae: ['"Yes,No"'] };
+    sheet.getCell(r, 13).dataValidation = { type: "list", allowBlank: true, formulae: ['"piece,kg"'] };
     // Common wholesale units; any other word is fine too.
     sheet.getCell(r, 9).dataValidation = {
       type: "list",
@@ -133,6 +135,7 @@ export async function buildTemplate(products: Product[], categories: Category[],
     ["Reorder level", "When stock falls to this number the product is marked Low stock."],
     ["Wholesale unit, pieces, price", "Optional, for selling in bulk: the unit (box, case, dozen, tray…), how many pieces are in one, and the price for one. Fill in all three, or leave all three empty for retail only. Stock stays counted in pieces."],
     ["Active (Yes/No)", "No hides the product from the register. Blank means Yes."],
+    ["Sold by (piece/kg)", "kg for things weighed on the scale (vegetables, meat…): the SRP, cost, quantity and reorder level are then per kg, and the register asks for the weight. Blank means piece for a new product, and no change for an existing one."],
     ["Updating products", "A row updates an existing product when its barcode, SKU, or exact name matches. Otherwise it is added as new."],
     ["Before anything is saved", "The website shows a preview of every new, changed and rejected row. Nothing changes until you confirm."],
   ];
@@ -163,6 +166,7 @@ export interface ImportRow {
   qty: number | null;
   reorder: number | null;
   active: boolean | null;
+  unit: "piece" | "kg" | null; // null = blank: piece for a new product, unchanged otherwise
   // Wholesale pack: null = none (retail only); undefined = the file has no
   // wholesale columns, so leave it as it is.
   wholesale?: { packName: string; packSize: number; wholesalePrice: number } | null;
@@ -244,6 +248,9 @@ export async function readImportFile(buffer: ArrayBuffer): Promise<{ rows: Impor
     }
     const activeText = cellText(get("active")).toLowerCase();
     if (activeText && !["yes", "no", "y", "n", "true", "false", "1", "0"].includes(activeText)) problems.push('Active must be "Yes" or "No"');
+    const unitText = cellText(get("unit")).toLowerCase().replace(/[.\s]/g, "");
+    const unit = !unitText ? null : ["kg", "kilo", "kilos", "kilogram", "kilograms", "weight"].includes(unitText) ? "kg" : ["piece", "pieces", "pc", "pcs", "pack", "count"].includes(unitText) ? "piece" : "bad";
+    if (unit === "bad") problems.push('Sold by must be "piece" or "kg"');
     const hasWsColumns = colOf.has("packName") && colOf.has("packSize") && colOf.has("wholesalePrice");
     const ws = hasWsColumns
       ? readWholesale(cellText(get("packName")), cellText(get("packSize")).replace(/[,\s]/g, ""), cellText(get("wholesalePrice")).replace(/[₱,\s]/g, ""))
@@ -266,6 +273,7 @@ export async function readImportFile(buffer: ArrayBuffer): Promise<{ rows: Impor
       qty: qty === null || qty === "bad" ? null : qty,
       reorder: reorder === null || reorder === "bad" ? null : reorder,
       active: activeText ? ["yes", "y", "true", "1"].includes(activeText) : null,
+      unit: unit === "bad" ? null : unit,
       wholesale:
         !ws || "error" in ws
           ? undefined
@@ -368,9 +376,9 @@ export async function planImport(rows: ImportRow[], fileErrors: string[]): Promi
         name: r.name,
         action: "add",
         changes: [
-          `SRP ₱${r.srp!.toFixed(2)}`,
+          `SRP ₱${r.srp!.toFixed(2)}${r.unit === "kg" ? " per kg" : ""}`,
           ...(r.category ? [r.category] : []),
-          ...(r.qty ? [`${r.qty} on hand`] : []),
+          ...(r.qty ? [`${r.qty}${r.unit === "kg" ? " kg" : ""} on hand`] : []),
           ...(r.barcode ? [`barcode ${r.barcode}`] : []),
           ...(r.wholesale ? [`wholesale ${wsText(r.wholesale)}`] : []),
         ],
@@ -387,6 +395,7 @@ export async function planImport(rows: ImportRow[], fileErrors: string[]): Promi
     if (r.sku && r.sku !== match.sku) diff.push(`SKU → ${r.sku}`);
     if (r.reorder != null && Math.abs(r.reorder - match.reorder_level) > 0.0001) diff.push(`reorder level → ${r.reorder}`);
     if (r.active != null && r.active !== !!match.is_active) diff.push(r.active ? "re-activated" : "deactivated");
+    if (r.unit != null && r.unit !== (match.unit === "kg" ? "kg" : "piece")) diff.push(r.unit === "kg" ? "sold by weight (kg)" : "sold by the piece");
     if (r.wholesale !== undefined && wsText(r.wholesale) !== wsText(productWholesale(match))) {
       diff.push(`wholesale → ${wsText(r.wholesale)}`);
     }
@@ -419,10 +428,10 @@ export async function applyImport(actor: Actor, rows: ImportRow[], plan: ImportP
         batch.push(
           {
             sql: `INSERT INTO products (name, category_id, barcode, sku, srp, cost, stock_qty, reorder_level, is_active,
-                                        pack_name, pack_size, wholesale_price)
-                  VALUES (?, ${catSql.sql}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                        pack_name, pack_size, wholesale_price, unit)
+                  VALUES (?, ${catSql.sql}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             args: [r.name, ...catSql.args, r.barcode, r.sku, r.srp, r.cost ?? 0, r.qty ?? 0, r.reorder ?? 0, r.active === false ? 0 : 1,
-                   r.wholesale?.packName ?? null, r.wholesale?.packSize ?? null, r.wholesale?.wholesalePrice ?? null],
+                   r.wholesale?.packName ?? null, r.wholesale?.packSize ?? null, r.wholesale?.wholesalePrice ?? null, r.unit ?? "piece"],
           },
           stmt`INSERT INTO price_history (product_id, old_srp, new_srp, actor_name) VALUES (last_insert_rowid(), ${null}, ${r.srp}, ${actor.name})`
         );
@@ -449,7 +458,7 @@ export async function applyImport(actor: Actor, rows: ImportRow[], plan: ImportP
         batch.push({
           sql: `UPDATE products SET name = ?, category_id = ${r.category != null ? catSql.sql : "category_id"},
                   barcode = ?, sku = ?, srp = ?, cost = ?, reorder_level = ?, is_active = ?,
-                  pack_name = ?, pack_size = ?, wholesale_price = ?,
+                  pack_name = ?, pack_size = ?, wholesale_price = ?, unit = ?,
                   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
                 WHERE id = ?`,
           args: [
@@ -464,6 +473,7 @@ export async function applyImport(actor: Actor, rows: ImportRow[], plan: ImportP
             ws?.packName ?? null,
             ws?.packSize ?? null,
             ws?.wholesalePrice ?? null,
+            r.unit ?? (p.unit === "kg" ? "kg" : "piece"),
             p.id,
           ],
         });

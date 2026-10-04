@@ -3,7 +3,7 @@
 import { Fragment, useState } from "react";
 import { formatQty } from "@/lib/format";
 import { byNumber, byString, useSearchSort } from "@/lib/useSearchSort";
-import { stockStatus } from "@/lib/types";
+import { stockStatus, unitSuffix } from "@/lib/types";
 import { Badge, GroupHeader, btnSecondary, tableCls } from "./ui";
 import CategoryIcon, { categoryColor } from "./CategoryIcon";
 import StockAdjustForm from "./StockAdjustForm";
@@ -17,6 +17,7 @@ export interface InventoryRow {
   stock_qty: number;
   reorder_level: number;
   photo_version: string | null;
+  unit: string;
 }
 
 const SORT_OPTIONS = [
@@ -86,8 +87,8 @@ export default function InventoryTable({ rows }: { rows: InventoryRow[] }) {
                               {p.name}
                             </span>
                           </td>
-                          <td className="text-right font-medium tabular-nums">{formatQty(p.stock_qty)}</td>
-                          <td className="text-right tabular-nums text-slate-600">{formatQty(p.reorder_level)}</td>
+                          <td className="text-right font-medium tabular-nums">{formatQty(p.stock_qty)}{unitSuffix(p.unit)}</td>
+                          <td className="text-right tabular-nums text-slate-600">{formatQty(p.reorder_level)}{unitSuffix(p.unit)}</td>
                           <td>
                             <Badge tone={s === "ok" ? "good" : s === "low" ? "warn" : "bad"}>
                               {s === "ok" ? "In stock" : s === "low" ? "Low stock" : "Out of stock"}

@@ -86,9 +86,13 @@ export default function ProductsBoard({ products, categories }: { products: Prod
                         </div>
                       </td>
                       <td className="font-mono text-xs tabular-nums text-slate-600">{p.barcode ?? "—"}</td>
-                      <td className="text-right tabular-nums text-slate-600">{formatCurrency(p.cost)}</td>
+                      <td className="text-right tabular-nums text-slate-600">
+                        {formatCurrency(p.cost)}
+                        {p.unit === "kg" && <span className="text-xs text-muted"> / kg</span>}
+                      </td>
                       <td className="text-right font-medium tabular-nums">
                         {formatCurrency(p.srp)}
+                        {p.unit === "kg" && <span className="text-xs font-normal text-muted"> / kg</span>}
                         {hasWholesale(p) && (
                           <div className="whitespace-nowrap text-xs font-normal text-muted">
                             {formatCurrency(p.wholesale_price!)} / {packLabel(p.pack_name!, p.pack_size!)}

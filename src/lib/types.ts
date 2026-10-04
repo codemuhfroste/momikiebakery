@@ -31,6 +31,15 @@ export interface Product {
   pack_name: string | null;
   pack_size: number | null;
   wholesale_price: number | null;
+  // "kg": sold by weight — stock, quantities and SRP are in kg / per kg.
+  unit: ProductUnit;
+}
+
+export type ProductUnit = "piece" | "kg";
+
+// " kg" after a quantity of a product sold by weight; nothing for pieces.
+export function unitSuffix(unit: string | null | undefined): string {
+  return unit === "kg" ? " kg" : "";
 }
 
 export type PriceType = "retail" | "wholesale";
@@ -128,6 +137,7 @@ export interface CreditItem {
   pack_name: string | null;
   pack_size: number | null;
   pack_price: number | null;
+  unit: string | null;
 }
 
 // A credit sale that still has something left to pay.
@@ -169,18 +179,21 @@ export interface SaleItem {
   pack_name: string | null;
   pack_size: number | null;
   pack_price: number | null; // charged per pack
+  unit: string | null; // "kg" when sold by weight (qty is then kg, prices per kg)
 }
 
-// How a line reads on a receipt: "2 boxes of 24 × ₱240.00" or "3 × ₱12.00".
+// How a line reads on a receipt: "2 boxes of 24 × ₱240.00", "0.35 kg × ₱80.00/kg"
+// or "3 × ₱12.00".
 export function lineQuantityText(
-  i: Pick<SaleItem, "qty" | "unit_price" | "packs" | "pack_name" | "pack_size" | "pack_price">,
+  i: Pick<SaleItem, "qty" | "unit_price" | "packs" | "pack_name" | "pack_size" | "pack_price"> & { unit?: string | null },
   money: (n: number) => string,
   qty: (n: number) => string
 ): string {
+  const u = unitSuffix(i.unit);
   if (i.packs != null && i.pack_name && i.pack_size && i.pack_price != null) {
-    return `${qty(i.packs)} ${packPlural(i.pack_name, i.packs)} of ${qty(i.pack_size)} × ${money(i.pack_price)}`;
+    return `${qty(i.packs)} ${packPlural(i.pack_name, i.packs)} of ${qty(i.pack_size)}${u} × ${money(i.pack_price)}`;
   }
-  return `${qty(i.qty)} × ${money(i.unit_price)}`;
+  return u ? `${qty(i.qty)} kg × ${money(i.unit_price)}/kg` : `${qty(i.qty)} × ${money(i.unit_price)}`;
 }
 
 export interface StockMovement {

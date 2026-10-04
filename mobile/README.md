@@ -16,7 +16,8 @@ get the top bar and ☰ menu, as on the website.
   scroll); search or scan (a USB/Bluetooth scanner works without tapping the
   search box); change a line's price (flagged "Not SRP", recorded as a price
   override); a Retail / Wholesale switch (wholesale sells by the product's pack
-  — box, case, dozen… — and works offline too); checkout by Cash, GCash, Maya, Card or Credit (with optional down
+  — box, case, dozen… — and works offline too); products sold by weight ask
+  for the kg (or a peso amount) when added, also offline; checkout by Cash, GCash, Maya, Card or Credit (with optional down
   payment).
 - **Transactions** — any day's recorded sales with the website's figures,
   filters and badges, plus anything still saved on the tablet.

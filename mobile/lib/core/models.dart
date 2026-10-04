@@ -32,6 +32,8 @@ class Product {
   final String? packName;
   final double? packSize;
   final double? wholesalePrice;
+  // 'kg' = sold by weight: srp is per kg and stock is in kg. 'piece' otherwise.
+  final String unit;
 
   const Product({
     required this.id,
@@ -46,7 +48,10 @@ class Product {
     this.packName,
     this.packSize,
     this.wholesalePrice,
+    this.unit = 'piece',
   });
+
+  bool get byWeight => unit == 'kg';
 
   bool get hasWholesale => packName != null && (packSize ?? 0) > 0 && wholesalePrice != null;
 
@@ -66,6 +71,7 @@ class Product {
         packName: _s(j['pack_name']),
         packSize: _dn(j['pack_size']),
         wholesalePrice: _dn(j['wholesale_price']),
+        unit: j['unit'] == 'kg' ? 'kg' : 'piece',
       );
 
   Json toJson() => {
@@ -81,6 +87,7 @@ class Product {
         'pack_name': packName,
         'pack_size': packSize,
         'wholesale_price': wholesalePrice,
+        'unit': unit,
       };
 
   Product withStock(double stock) => Product(
@@ -96,6 +103,7 @@ class Product {
         packName: packName,
         packSize: packSize,
         wholesalePrice: wholesalePrice,
+        unit: unit,
       );
 }
 
@@ -178,6 +186,8 @@ class CartLine {
       : unitPrice = unitPrice ?? (byPack ? product.wholesalePrice! : product.srp);
   double get listPrice => byPack ? product.wholesalePrice! : product.srp;
   double get pieces => byPack ? qty * product.packSize! : qty;
+  // Weighed on the scale: qty is in kg.
+  bool get weighed => product.byWeight && !byPack;
   double get total => round2(unitPrice * qty);
   bool get priceChanged => (unitPrice - listPrice).abs() > 0.004;
 }
@@ -258,6 +268,7 @@ class PendingSaleItem {
   final double? packs; // set when sold by the pack; unitPrice and srp are then per pack
   final String? packName; // for the printed receipt ("2 boxes of 24")
   final double? packSize;
+  final String? unit; // 'kg' when sold by weight (qty in kg, prices per kg)
   final double unitPrice;
   final double srp;
   final String? barcode;
@@ -269,6 +280,7 @@ class PendingSaleItem {
     this.packs,
     this.packName,
     this.packSize,
+    this.unit,
     required this.unitPrice,
     required this.srp,
     this.barcode,
@@ -281,6 +293,7 @@ class PendingSaleItem {
         if (packs != null) 'packs': packs,
         if (packName != null) 'packName': packName,
         if (packSize != null) 'packSize': packSize,
+        if (unit != null) 'unit': unit,
         'unitPrice': unitPrice,
         'srp': srp,
         'barcode': barcode,
@@ -293,6 +306,7 @@ class PendingSaleItem {
         packs: _dn(j['packs']),
         packName: _s(j['packName']),
         packSize: _dn(j['packSize']),
+        unit: _s(j['unit']),
         unitPrice: _d(j['unitPrice']),
         srp: _d(j['srp']),
         barcode: _s(j['barcode']),
