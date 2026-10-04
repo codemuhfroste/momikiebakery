@@ -2,7 +2,7 @@
 
 import { formatCurrency } from "@/lib/format";
 import { byNumber, byString, useSearchSort } from "@/lib/useSearchSort";
-import type { Category, Product } from "@/lib/types";
+import { hasWholesale, packLabel, type Category, type Product } from "@/lib/types";
 import { Badge, GroupHeader, tableCls } from "./ui";
 import CategoryIcon, { categoryColor } from "./CategoryIcon";
 import ProductDialogButton from "./ProductDialogButton";
@@ -87,7 +87,14 @@ export default function ProductsBoard({ products, categories }: { products: Prod
                       </td>
                       <td className="font-mono text-xs tabular-nums text-slate-600">{p.barcode ?? "—"}</td>
                       <td className="text-right tabular-nums text-slate-600">{formatCurrency(p.cost)}</td>
-                      <td className="text-right font-medium tabular-nums">{formatCurrency(p.srp)}</td>
+                      <td className="text-right font-medium tabular-nums">
+                        {formatCurrency(p.srp)}
+                        {hasWholesale(p) && (
+                          <div className="whitespace-nowrap text-xs font-normal text-muted">
+                            {formatCurrency(p.wholesale_price!)} / {packLabel(p.pack_name!, p.pack_size!)}
+                          </div>
+                        )}
+                      </td>
                       <td className="text-right tabular-nums text-slate-600">
                         {p.srp > 0 ? `${(margin(p) * 100).toFixed(0)}%` : "—"}
                       </td>

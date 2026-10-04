@@ -14,7 +14,7 @@ export default async function PosPage() {
     <>
       <PageHeader
         title="Register"
-        subtitle="Scan or select products, then choose how the customer pays. Prices start at the SRP; any change is recorded in the Audit Log."
+        subtitle="Scan or select products, then choose how the customer pays. Prices start at the SRP (or the wholesale price for a wholesale sale); any change is recorded in the Audit Log."
       />
       <PosClient
         products={products.map((p) => ({
@@ -24,6 +24,9 @@ export default async function PosPage() {
           barcode: p.barcode,
           category_name: p.category_name,
           srp: p.srp,
+          pack_name: p.pack_name,
+          pack_size: p.pack_size,
+          wholesale_price: p.wholesale_price,
           stock_qty: p.stock_qty,
           photo_version: p.photo_version,
         }))}

@@ -42,11 +42,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _rowKey = GlobalKey();
   final _cartKey = GlobalKey();
   final List<CartLine> _cart = [];
-  final Map<int, TextEditingController> _priceText = {};
+  final Map<String, TextEditingController> _priceText = {}; // by line key
 
   (String, bool)? _notice; // text, ok
   (int, int)? _flash; // product id, counter (replays the flash)
   String _method = 'Cash';
+  // Retail or wholesale, chosen per sale by the cashier (as on the website).
+  String _priceType = 'retail';
+  bool get _wholesale => _priceType == 'wholesale';
   int? _customerId;
   bool _busy = false;
   String? _error;
@@ -112,23 +115,58 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // ---------------------------------------------------------------- cart
 
+  static String _key(CartLine l) => '${l.product.id}:${l.byPack}';
+
   void _add(Product p, {String? notice}) {
     HapticFeedback.selectionClick();
+    // Wholesale: products with a pack are added by the pack.
+    final byPack = _wholesale && p.hasWholesale;
     setState(() {
       _lastSale = null;
       _notice = notice == null ? null : (notice, true);
       _flash = (p.id, (_flash?.$2 ?? 0) + 1);
-      final line = _cart.where((l) => l.product.id == p.id).firstOrNull;
-      if (line != null) {
-        line.qty += 1;
-      } else {
-        _cart.add(CartLine(p, 1));
+      final line = _cart.where((l) => l.product.id == p.id && l.byPack == byPack).firstOrNull ?? CartLine(p, 0, byPack: byPack);
+      if (line.qty + 1 > _maxQty(line)) {
+        _notice = ('Not enough stock for ${byPack ? 'another ${p.packLabel}' : 'another'} ${p.name} (${qty(p.stockQty)} left).', false);
+        return;
       }
+      line.qty += 1;
+      if (!_cart.contains(line)) _cart.add(line);
     });
   }
 
-  TextEditingController _priceFor(CartLine l) =>
-      _priceText.putIfAbsent(l.product.id, () => TextEditingController(text: _plain(l.unitPrice)));
+  /// The most of this line the stock allows, given the product's other lines.
+  double _maxQty(CartLine line) {
+    final others = _cart.where((l) => l.product.id == line.product.id && l != line).fold<double>(0, (n, l) => n + l.pieces);
+    final free = line.product.stockQty - others;
+    return line.byPack ? (free / line.product.packSize!).floorToDouble() : free;
+  }
+
+  /// Piece ↔ pack for one line: same count, list price for the new unit,
+  /// merged into a line already in that unit.
+  void _switchUnit(CartLine line, bool byPack) {
+    if (line.byPack == byPack || (byPack && !line.product.hasWholesale)) return;
+    final index = _cart.indexOf(line);
+    if (index < 0) return;
+    _priceText.remove(_key(line))?.dispose();
+    final same = _cart.where((l) => l.product.id == line.product.id && l.byPack == byPack).firstOrNull;
+    if (same != null) {
+      same.qty += line.qty;
+      _cart.removeAt(index);
+    } else {
+      _cart[index] = CartLine(line.product, line.qty, byPack: byPack);
+    }
+  }
+
+  /// Switching the whole sale: lines that can be sold by the pack follow.
+  void _choosePriceType(String type) => setState(() {
+    _priceType = type;
+    for (final l in List.of(_cart)) {
+      if (_cart.contains(l)) _switchUnit(l, type == 'wholesale');
+    }
+  });
+
+  TextEditingController _priceFor(CartLine l) => _priceText.putIfAbsent(_key(l), () => TextEditingController(text: _plain(l.unitPrice)));
 
   static String _plain(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
@@ -139,7 +177,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _remove(CartLine l) => setState(() {
     _cart.remove(l);
-    _priceText.remove(l.product.id)?.dispose();
+    _priceText.remove(_key(l))?.dispose();
   });
 
   void _clearCart() => setState(() {
@@ -176,7 +214,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // ---------------------------------------------------------------- totals
 
-  double get _subtotal => round2(_cart.fold<double>(0, (s, l) => s + l.unitPrice * l.qty));
+  double get _subtotal => round2(_cart.fold<double>(0, (s, l) => s + l.total));
   double get _discountValue => (double.tryParse(_discount.text) ?? 0).clamp(0, _subtotal).toDouble();
   double get _total => round2(_subtotal - _discountValue);
   bool get _isCredit => _method == 'Credit';
@@ -201,6 +239,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       method: _method,
       amountTendered: _tenderedValue,
       customerId: _isCredit ? _customerId : null,
+      priceType: _priceType,
     );
     if (!mounted) return;
     if (error != null) {
@@ -216,6 +255,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _discount.clear();
       _tendered.clear();
       _method = 'Cash';
+      _priceType = 'retail';
       _customerId = null;
       _search.clear();
       _notice = null;
@@ -246,7 +286,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     const header = PageHeader(
       title: 'Register',
       subtitle:
-          'Scan or select products, then choose how the customer pays. Prices start at the SRP; any change is recorded in the Audit Log.',
+          'Scan or select products, then choose how the customer pays. Prices start at the SRP (or the wholesale price for a wholesale sale); any change is recorded in the Audit Log.',
     );
     final picker = _picker(app, results, width);
 
@@ -430,6 +470,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Expanded(
                         child: i + j < results.length
                             ? _ProductTile(
+                                wholesale: _wholesale,
                                 product: results[i + j],
                                 flash: _flash != null && _flash!.$1 == results[i + j].id ? _flash!.$2 : null,
                                 onTap: () => _add(results[i + j]),
@@ -502,6 +543,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ],
             ),
           ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Brand.line)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: Brand.slate100, borderRadius: BorderRadius.circular(6)),
+                  child: Row(
+                    children: [
+                      for (final (type, label) in const [('retail', 'Retail'), ('wholesale', 'Wholesale')])
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => _choosePriceType(type),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              decoration: BoxDecoration(
+                                color: _priceType == type ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(4),
+                                boxShadow: _priceType == type ? Brand.shadowSm : null,
+                              ),
+                              child: Text(
+                                label,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: _priceType == type ? Brand.ink : Brand.muted,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (_wholesale)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Products with a wholesale pack are sold by the pack at the wholesale price; others at their SRP.',
+                      style: tXs,
+                    ),
+                  ),
+              ],
+            ),
+          ),
           ConstrainedBox(
             constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.36),
             child: _cart.isEmpty
@@ -534,7 +626,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '$overrides item${overrides > 1 ? 's are' : ' is'} priced differently from the SRP. This will be recorded in the Audit Log.',
+                      '$overrides item${overrides > 1 ? 's are' : ' is'} priced differently from the ${_wholesale ? 'SRP or wholesale price' : 'SRP'}. This will be recorded in the Audit Log.',
                       style: const TextStyle(fontSize: 12, color: Brand.amber900),
                     ),
                   ),
@@ -760,10 +852,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    l.product.name,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Brand.ink),
+                  padding: EdgeInsets.only(top: l.product.hasWholesale ? 0 : 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l.product.name,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Brand.ink),
+                      ),
+                      if (l.product.hasWholesale)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Wrap(
+                            spacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              for (final byPack in const [false, true])
+                                InkWell(
+                                  onTap: () => setState(() => _switchUnit(l, byPack)),
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: l.byPack == byPack ? Brand.navySoft : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      byPack ? 'By ${l.product.packName}' : 'By piece',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: l.byPack == byPack ? Brand.navy : Brand.muted,
+                                        fontWeight: l.byPack == byPack ? FontWeight.w500 : FontWeight.w400,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              if (l.byPack) Text('· ${l.product.packLabel} = ${qty(l.pieces)} pcs', style: tXs),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -793,7 +921,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         style: tSm.copyWith(fontFeatures: tabular),
                       ),
                     ),
-                    _stepButton('+', () => setState(() => l.qty = math.min(l.product.stockQty, l.qty + 1))),
+                    _stepButton('+', () => setState(() => l.qty = math.max(l.qty, math.min(_maxQty(l), l.qty + 1)))),
                   ],
                 ),
               ),
@@ -804,6 +932,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 width: 80,
                 child: _smallInput(_priceFor(l), highlight: changed, onChanged: (v) => _setPrice(l, double.tryParse(v) ?? 0)),
               ),
+              if (l.byPack) ...[const SizedBox(width: 6), Text('/ ${l.product.packName}', style: tXs)],
               const SizedBox(width: 8),
               Expanded(
                 child: Align(
@@ -826,12 +955,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 spacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const WebBadge('Not SRP', tone: Tone.warn),
-                  Text('SRP is ${peso(l.product.srp)}.', style: const TextStyle(fontSize: 12, color: Brand.amber800)),
+                  WebBadge(l.byPack ? 'Not wholesale price' : 'Not SRP', tone: Tone.warn),
+                  Text(
+                    l.byPack ? 'Wholesale is ${peso(l.listPrice)} / ${l.product.packName}.' : 'SRP is ${peso(l.listPrice)}.',
+                    style: const TextStyle(fontSize: 12, color: Brand.amber800),
+                  ),
                   InkWell(
-                    onTap: () => _setPrice(l, l.product.srp, updateText: true),
-                    child: const Text(
-                      'Use SRP',
+                    onTap: () => _setPrice(l, l.listPrice, updateText: true),
+                    child: Text(
+                      l.byPack ? 'Use wholesale price' : 'Use SRP',
                       style: TextStyle(
                         fontSize: 12,
                         color: Brand.amber800,
@@ -1063,10 +1195,11 @@ class _CustomerPickerState extends State<_CustomerPicker> {
 /// A product card in the grid — the website's tile, with its press-in and
 /// the brief brand-coloured flash when added.
 class _ProductTile extends StatefulWidget {
-  const _ProductTile({required this.product, required this.onTap, this.flash});
+  const _ProductTile({required this.product, required this.onTap, this.flash, this.wholesale = false});
   final Product product;
   final VoidCallback onTap;
   final int? flash;
+  final bool wholesale; // show the wholesale (per pack) price
 
   @override
   State<_ProductTile> createState() => _ProductTileState();
@@ -1131,8 +1264,17 @@ class _ProductTileState extends State<_ProductTile> {
                           spacing: 8,
                           runSpacing: 2,
                           children: [
-                            Text(
-                              peso(p.srp),
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(text: peso(widget.wholesale && p.hasWholesale ? p.wholesalePrice! : p.srp)),
+                                  if (widget.wholesale && p.hasWholesale)
+                                    TextSpan(
+                                      text: ' / ${p.packName}',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Brand.muted),
+                                    ),
+                                ],
+                              ),
                               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Brand.ink, fontFeatures: tabular),
                             ),
                             Text(
@@ -1145,6 +1287,7 @@ class _ProductTileState extends State<_ProductTile> {
                             ),
                           ],
                         ),
+                        if (widget.wholesale && p.hasWholesale) Text(p.packLabel, style: tXs),
                       ],
                     ),
                   ),

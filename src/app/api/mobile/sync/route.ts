@@ -21,7 +21,9 @@ const UUID = /^[A-Za-z0-9-]{8,64}$/;
 interface SaleIn {
   clientUuid?: unknown;
   recordedAt?: unknown;
-  items?: { productId?: unknown; qty?: unknown; unitPrice?: unknown; srp?: unknown; barcode?: unknown }[];
+  // packs set = sold by the pack (wholesale): unitPrice and srp are per pack.
+  items?: { productId?: unknown; qty?: unknown; packs?: unknown; unitPrice?: unknown; srp?: unknown; barcode?: unknown }[];
+  priceType?: unknown;
   discount?: unknown;
   paymentMethod?: unknown;
   amountTendered?: unknown;
@@ -60,20 +62,26 @@ export async function POST(request: Request) {
       }
       const items = Array.isArray(s.items) ? s.items : [];
       const deviceSrp: Record<string, number> = {};
-      for (const i of items) if (Number.isFinite(Number(i.srp))) deviceSrp[String(i.productId)] = Number(i.srp);
+      const deviceWholesale: Record<string, number> = {};
+      for (const i of items) {
+        if (!Number.isFinite(Number(i.srp))) continue;
+        (i.packs == null ? deviceSrp : deviceWholesale)[String(i.productId)] = Number(i.srp);
+      }
 
       const result = await processCheckout(session, {
         items: items.map((i) => ({
           productId: Number(i.productId),
           qty: Number(i.qty),
+          packs: i.packs == null ? null : Number(i.packs),
           unitPrice: Number(i.unitPrice),
           barcode: typeof i.barcode === "string" ? i.barcode : null,
         })),
+        priceType: s.priceType === "wholesale" ? "wholesale" : s.priceType === "retail" ? "retail" : undefined,
         discount: Number(s.discount) || 0,
         paymentMethod: method,
         amountTendered: Number(s.amountTendered) || 0,
         customerId: s.customerId == null ? null : Number(s.customerId),
-        offline: { clientUuid, recordedAt: String(s.recordedAt ?? ""), deviceSrp },
+        offline: { clientUuid, recordedAt: String(s.recordedAt ?? ""), deviceSrp, deviceWholesale },
       });
       saleResults.push(
         "error" in result

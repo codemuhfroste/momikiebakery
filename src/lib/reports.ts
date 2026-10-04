@@ -96,6 +96,7 @@ export interface SalesReport {
   totals: { count: number; revenue: number; cost: number; discounts: number; credit: number; voids: number };
   byDay: { day: string; count: number; revenue: number; cost: number }[];
   byMethod: MethodLine[];
+  byPriceType: { type: "retail" | "wholesale"; count: number; revenue: number; cost: number }[];
   byCategory: { category: string; qty: number; revenue: number; cost: number }[];
   topProducts: { name: string; qty: number; revenue: number; cost: number }[];
 }
@@ -148,6 +149,13 @@ export async function getSalesReport(from: string, to: string): Promise<SalesRep
   ]);
   const costByDay = new Map(dayCost.map((d) => [d.day, d.cost]));
   const cost = dayCost.reduce((s, d) => s + d.cost, 0);
+  // Retail vs wholesale.
+  const [byPriceType] = await readBatch<[SalesReport["byPriceType"]]>([
+    stmt`SELECT COALESCE(s.price_type, 'retail') AS type, COUNT(*) AS count, COALESCE(SUM(s.total), 0) AS revenue,
+                COALESCE(SUM((SELECT SUM(i.unit_cost * i.qty) FROM sale_items i WHERE i.sale_id = s.id)), 0) AS cost
+         FROM sales s WHERE s.voided_at IS NULL AND s.created_at >= ${start} AND s.created_at < ${end}
+         GROUP BY type ORDER BY type DESC`,
+  ]);
 
   return {
     from,
@@ -162,6 +170,7 @@ export async function getSalesReport(from: string, to: string): Promise<SalesRep
     },
     byDay: byDay.map((d) => ({ ...d, cost: round2(costByDay.get(d.day) ?? 0) })),
     byMethod,
+    byPriceType: byPriceType.map((t) => ({ ...t, revenue: round2(t.revenue), cost: round2(t.cost) })),
     byCategory,
     topProducts,
   };
@@ -173,7 +182,8 @@ export async function getSalesExportRows(from: string, to: string, kind: "sales"
   if (kind === "items") {
     const [rows] = await readBatch<[Record<string, unknown>[]]>([
       stmt`SELECT s.receipt_no, s.created_at, s.voided_at, i.name, COALESCE(c.name, 'Uncategorized') AS category,
-                  i.barcode, i.qty, i.srp, i.unit_price, i.line_total, i.unit_cost
+                  i.barcode, i.qty, i.srp, i.unit_price, i.line_total, i.unit_cost,
+                  i.packs, i.pack_name, i.pack_size, i.pack_price, s.price_type
            FROM sale_items i JOIN sales s ON s.id = i.sale_id
            LEFT JOIN products p ON p.id = i.product_id LEFT JOIN categories c ON c.id = p.category_id
            WHERE s.created_at >= ${start} AND s.created_at < ${end}
@@ -184,8 +194,10 @@ export async function getSalesExportRows(from: string, to: string, kind: "sales"
   const [rows] = await readBatch<[Record<string, unknown>[]]>([
     stmt`SELECT s.receipt_no, s.created_at, s.cashier_name, cu.name AS customer, s.payment_method,
                 s.subtotal, s.discount, s.total, s.amount_tendered, s.credit_amount, s.voided_at, s.void_reason,
-                s.source, s.sync_note,
-                (SELECT GROUP_CONCAT(printf('%g x %s', qty, name), '; ') FROM sale_items WHERE sale_id = s.id) AS items
+                s.source, s.sync_note, s.price_type,
+                (SELECT GROUP_CONCAT(CASE WHEN packs IS NOT NULL THEN printf('%g %s x %s', packs, pack_name, name)
+                                          ELSE printf('%g x %s', qty, name) END, '; ')
+                 FROM sale_items WHERE sale_id = s.id) AS items
          FROM sales s LEFT JOIN customers cu ON cu.id = s.customer_id
          WHERE s.created_at >= ${start} AND s.created_at < ${end}
          ORDER BY s.created_at, s.id`,

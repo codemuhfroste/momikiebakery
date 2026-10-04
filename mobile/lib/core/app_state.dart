@@ -175,6 +175,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     required String method,
     required double amountTendered,
     int? customerId,
+    String priceType = 'retail',
   }) async {
     if (cart.isEmpty) return 'The cart is empty.';
     if (cart.any((l) => l.qty <= 0 || l.unitPrice < 0)) return 'A cart line has an invalid quantity or price.';
@@ -203,9 +204,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           PendingSaleItem(
             productId: l.product.id,
             name: l.product.name,
-            qty: l.qty,
+            qty: l.pieces,
+            packs: l.byPack ? l.qty : null,
             unitPrice: round2(l.unitPrice),
-            srp: l.product.srp,
+            srp: l.listPrice,
             barcode: l.product.barcode,
           ),
       ],
@@ -215,6 +217,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       customerId: isCredit ? customer!.id : null,
       customerName: isCredit ? customer!.name : null,
       total: total,
+      priceType: priceType,
     );
     pendingSales.add(sale);
     _applySale(sale);

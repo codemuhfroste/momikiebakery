@@ -2,7 +2,10 @@
 // PageHeader, Card, Stat, Badge, Tabs, tables, buttons and inputs — same
 // sizes, colours and spacing, so a screen here reads like the same page on
 // the site.
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/theme.dart';
@@ -403,7 +406,7 @@ class WebTable extends StatelessWidget {
     Widget cell(Widget child, int col, {required bool head, int? row}) {
       final c = columns[col];
       Widget inner = Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: head ? 8 : 12),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: head ? 8 : 12),
         child: Align(alignment: c.right ? Alignment.centerRight : Alignment.centerLeft, child: child),
       );
       if (!head && onRowTap != null) {
@@ -451,17 +454,70 @@ class WebTable extends StatelessWidget {
     );
     // Like an HTML table: columns share the width and long text wraps. On
     // phone-sized screens it scrolls sideways instead of squeezing.
-    return LayoutBuilder(
-      builder: (context, c) => c.maxWidth >= 600
-          ? table
-          : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: c.maxWidth),
-                child: table,
-              ),
-            ),
-    );
+    // Fills the card width, letting columns shrink and text wrap; only if
+    // even that doesn't fit does it scroll sideways (like the site's tables).
+    return LayoutBuilder(builder: (context, c) => _SideScroll(child: _AtLeastMinWidth(width: c.maxWidth, child: table)));
+  }
+}
+
+/// Sideways scrolling with a visible scrollbar (shown only when there is more
+/// to see), like a browser's.
+class _SideScroll extends StatefulWidget {
+  const _SideScroll({required this.child});
+  final Widget child;
+  @override
+  State<_SideScroll> createState() => _SideScrollState();
+}
+
+class _SideScrollState extends State<_SideScroll> {
+  final _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scrollbar(
+    controller: _controller,
+    thumbVisibility: true,
+    child: SingleChildScrollView(
+      controller: _controller,
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.only(bottom: 6),
+      child: widget.child,
+    ),
+  );
+}
+
+/// Lays its child out at [width], or at the child's narrowest possible width
+/// if that is wider.
+class _AtLeastMinWidth extends SingleChildRenderObjectWidget {
+  const _AtLeastMinWidth({required this.width, required super.child});
+  final double width;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderAtLeastMinWidth(width);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderAtLeastMinWidth renderObject) => renderObject.width = width;
+}
+
+class _RenderAtLeastMinWidth extends RenderProxyBox {
+  _RenderAtLeastMinWidth(this._width);
+  double _width;
+  set width(double value) {
+    if (value == _width) return;
+    _width = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    final w = math.max(_width, child!.getMinIntrinsicWidth(double.infinity));
+    child!.layout(BoxConstraints.tightFor(width: w), parentUsesSize: true);
+    size = constraints.constrain(child!.size);
   }
 }
 

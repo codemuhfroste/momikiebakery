@@ -122,6 +122,7 @@ export default async function SalesPage({ searchParams }: PageProps<"/sales">) {
                     )}
                     {s.override_count > 0 && <Badge tone="warn">Price changed</Badge>}
                     {s.voided_at && <Badge tone="bad">Voided</Badge>}
+                    {s.price_type === "wholesale" && <Badge tone="info">Wholesale</Badge>}
                     {s.source === "mobile" && <Badge tone="info">Mobile app</Badge>}
                     {s.sync_note && (
                       <div className="mt-1 whitespace-normal text-xs text-amber-800" title={s.sync_note}>

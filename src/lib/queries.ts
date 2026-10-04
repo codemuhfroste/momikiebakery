@@ -161,7 +161,7 @@ export async function getCreditItems(customerId: number): Promise<CreditItem[]> 
     SELECT i.id AS item_id, s.id AS sale_id, s.receipt_no, s.created_at AS sale_date,
       (s.voided_at IS NOT NULL) AS voided, s.credit_amount,
       (SELECT COALESCE(SUM(a.amount), 0) FROM credit_allocations a WHERE a.sale_id = s.id) AS credit_paid,
-      i.name, i.qty, i.unit_price, i.line_total
+      i.name, i.qty, i.unit_price, i.line_total, i.packs, i.pack_name, i.pack_size, i.pack_price
     FROM sale_items i JOIN sales s ON s.id = i.sale_id
     WHERE s.customer_id = ${customerId} AND s.credit_amount > 0
     ORDER BY s.created_at DESC, s.id DESC, i.id`;

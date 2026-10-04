@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSessionOrRedirect } from "@/lib/rbac";
 import { getSale, getSaleCreditPayments } from "@/lib/queries";
-import { CREDIT_STATUS_LABELS, creditPaymentStatus } from "@/lib/types";
+import { CREDIT_STATUS_LABELS, creditPaymentStatus, lineQuantityText } from "@/lib/types";
 import { formatCurrency, formatDateTime, formatQty } from "@/lib/format";
 import { Badge, Card, CardHeader, Notice, PageHeader, btnPrimary } from "@/components/ui";
 import PrintButton from "@/components/PrintButton";
@@ -61,6 +61,9 @@ export default async function SaleDetailPage({ params, searchParams }: PageProps
           <div className="text-xs text-muted">{formatDateTime(sale.created_at)}</div>
           <div className="text-xs text-muted">Cashier: {sale.cashier_name}</div>
           {sale.customer_name && <div className="text-xs text-muted">Customer: {sale.customer_name}</div>}
+          {sale.price_type === "wholesale" && (
+            <div className="mt-1 text-xs font-semibold uppercase tracking-wide">Wholesale</div>
+          )}
           {sale.voided_at && (
             <div className="mt-2">
               <Badge tone="bad">VOIDED</Badge>
@@ -71,6 +74,7 @@ export default async function SaleDetailPage({ params, searchParams }: PageProps
         <div className="my-4 border-y border-dashed border-line py-3 text-sm">
           {items.map((i) => {
             const changed = Math.abs(i.unit_price - i.srp) > 0.004;
+            const byPack = i.packs != null && i.pack_name && i.pack_size;
             return (
               <div key={i.id} className="py-1">
                 <div className="flex justify-between gap-3">
@@ -78,9 +82,13 @@ export default async function SaleDetailPage({ params, searchParams }: PageProps
                   <span className="tabular-nums">{formatCurrency(i.line_total)}</span>
                 </div>
                 <div className="text-xs text-muted">
-                  {formatQty(i.qty)} × {formatCurrency(i.unit_price)}
+                  {lineQuantityText(i, formatCurrency, formatQty)}
                   {changed && (
-                    <span className="ml-2 text-amber-700 print:hidden">(SRP {formatCurrency(i.srp)})</span>
+                    <span className="ml-2 text-amber-700 print:hidden">
+                      {byPack
+                        ? `(wholesale ${formatCurrency(i.srp * i.pack_size!)} / ${i.pack_name})`
+                        : `(SRP ${formatCurrency(i.srp)})`}
+                    </span>
                   )}
                 </div>
               </div>

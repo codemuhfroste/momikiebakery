@@ -19,7 +19,16 @@ import {
 } from "./db";
 import { auditStmt, type AuditInput } from "./audit";
 import { formatCurrency, round2 } from "./format";
-import { PAYMENT_METHODS, type Customer, type PaymentMethod, type Product, type Sale, type SaleItem } from "./types";
+import {
+  PAYMENT_METHODS,
+  hasWholesale,
+  type Customer,
+  type PaymentMethod,
+  type PriceType,
+  type Product,
+  type Sale,
+  type SaleItem,
+} from "./types";
 
 export interface Actor {
   name: string;
@@ -27,7 +36,13 @@ export interface Actor {
 }
 
 export interface CheckoutInput {
-  items: { productId: number; qty: number; unitPrice: number; barcode?: string | null }[];
+  // A line sold by the piece: qty pieces at unitPrice each. A line sold by the
+  // product's wholesale pack: `packs` packs at unitPrice per pack (qty is
+  // then worked out here from the pack size).
+  items: { productId: number; qty: number; unitPrice: number; packs?: number | null; barcode?: string | null }[];
+  // Retail or wholesale, as chosen at the register (default: wholesale if
+  // any line is sold by the pack).
+  priceType?: PriceType;
   discount: number;
   paymentMethod: PaymentMethod;
   // Cash: the amount handed over. Credit: the down payment (0 = all on credit).
@@ -42,6 +57,7 @@ export interface OfflineSaleInfo {
   clientUuid: string; // unique per sale, made on the phone; re-sending the same sale is harmless
   recordedAt: string; // ISO time the sale was rung up on the phone
   deviceSrp?: Record<string, number>; // the SRP the phone showed, per product id
+  deviceWholesale?: Record<string, number>; // the wholesale (per pack) price the phone showed
 }
 
 export type CheckoutResult =
@@ -91,7 +107,7 @@ export async function processCheckout(actor: Actor, input: CheckoutInput): Promi
   if (isCredit && !input.customerId) return { error: "Choose the customer this sale is credited to." };
 
   for (const item of input.items) {
-    const qty = Number(item.qty);
+    const qty = Number(item.packs ?? item.qty);
     const price = Number(item.unitPrice);
     if (!(qty > 0) || !(price >= 0) || !Number.isFinite(price)) {
       return { error: "A cart line has an invalid quantity or price." };
@@ -146,20 +162,57 @@ async function tryCheckout(
   const notes: string[] = [];
 
   // ---- Work out the sale ----
+  // Every line is kept in pieces (qty, price per piece, list price per piece)
+  // so stock, cost and profit work the same for both; a line sold by the
+  // pack also keeps its packs and pack price for the receipt.
   let subtotal = 0;
-  const lines: { product: Product; qty: number; unitPrice: number; srp: number; barcode: string | null }[] = [];
+  const lines: {
+    product: Product;
+    qty: number;
+    unitPrice: number; // per piece
+    srp: number; // list price per piece: SRP, or wholesale price ÷ pack size
+    lineTotal: number;
+    pack: { packs: number; name: string; size: number; price: number; listPrice: number } | null;
+    barcode: string | null;
+  }[] = [];
   const qtyByProduct = new Map<number, number>();
   for (const item of input.items) {
     const product = products.get(Number(item.productId));
     if (!product || (!product.is_active && !offline)) return { error: "A product in the cart is no longer available." };
-    const qty = Number(item.qty);
-    const unitPrice = round2(Number(item.unitPrice));
-    qtyByProduct.set(product.id, (qtyByProduct.get(product.id) ?? 0) + qty);
-    subtotal += unitPrice * qty;
-    // Offline: compare against the SRP the phone showed, not today's.
-    const srp = offline?.deviceSrp?.[String(product.id)] ?? product.srp;
-    lines.push({ product, qty, unitPrice, srp, barcode: item.barcode ?? product.barcode });
+    const byPack = item.packs != null;
+    if (byPack && !hasWholesale(product)) return { error: `${product.name} has no wholesale pack set up.` };
+    const barcode = item.barcode ?? product.barcode;
+    if (byPack) {
+      const packs = Number(item.packs);
+      const size = product.pack_size!;
+      const price = round2(Number(item.unitPrice));
+      // Offline: compare against the wholesale price the phone showed.
+      const listPrice = offline?.deviceWholesale?.[String(product.id)] ?? product.wholesale_price!;
+      const qty = packs * size;
+      const lineTotal = round2(packs * price);
+      qtyByProduct.set(product.id, (qtyByProduct.get(product.id) ?? 0) + qty);
+      subtotal += lineTotal;
+      lines.push({
+        product, qty, unitPrice: price / size, srp: listPrice / size, lineTotal, barcode,
+        pack: { packs, name: product.pack_name!, size, price, listPrice },
+      });
+    } else {
+      const qty = Number(item.qty);
+      const unitPrice = round2(Number(item.unitPrice));
+      const lineTotal = round2(unitPrice * qty);
+      qtyByProduct.set(product.id, (qtyByProduct.get(product.id) ?? 0) + qty);
+      subtotal += lineTotal;
+      // Offline: compare against the SRP the phone showed, not today's.
+      const srp = offline?.deviceSrp?.[String(product.id)] ?? product.srp;
+      lines.push({ product, qty, unitPrice, srp, lineTotal, pack: null, barcode });
+    }
   }
+  const priceType: PriceType =
+    input.priceType === "wholesale" || input.priceType === "retail"
+      ? input.priceType
+      : lines.some((l) => l.pack)
+        ? "wholesale"
+        : "retail";
   for (const [id, qty] of qtyByProduct) {
     const p = products.get(id)!;
     if (p.stock_qty < qty) {
@@ -228,13 +281,13 @@ async function tryCheckout(
   const batch: Statement[] = [
     {
       sql: `INSERT INTO sales (receipt_no, subtotal, discount, total, payment_method, amount_tendered,
-                               cashier_name, customer_id, credit_amount, created_at, client_uuid, source, sync_note)
+                               cashier_name, customer_id, credit_amount, created_at, client_uuid, source, sync_note, price_type)
             SELECT ${receiptNoSql}, ?, ?, ?, ?, ?, ?, ?, ?,
-                   COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), ?, ?, ? WHERE ${guardSql}`,
+                   COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), ?, ?, ?, ? WHERE ${guardSql}`,
       args: [
         ...receiptNoArgs, subtotal, discount, total, input.paymentMethod, tendered,
         actor.name, customer?.id ?? null, creditAmount,
-        recordedAt, offline?.clientUuid ?? null, offline ? "mobile" : "web", notes.length ? notes.join("; ") : null,
+        recordedAt, offline?.clientUuid ?? null, offline ? "mobile" : "web", notes.length ? notes.join("; ") : null, priceType,
         ...guardArgs,
       ],
     },
@@ -246,7 +299,7 @@ async function tryCheckout(
       actorName: actor.name,
       actorRole: actor.role,
       action: "sale.create",
-      summary: `Sale ${receiptNo} — ${formatCurrency(total)}${offline ? " (mobile app)" : ""}`,
+      summary: `${priceType === "wholesale" ? "Wholesale sale" : "Sale"} ${receiptNo} — ${formatCurrency(total)}${offline ? " (mobile app)" : ""}`,
       details: { receiptNo, ...(offline ? { recordedAt, clientUuid: offline.clientUuid } : {}) },
     }),
   ];
@@ -254,10 +307,12 @@ async function tryCheckout(
   for (const l of lines) {
     batch.push(
       {
-        sql: `INSERT INTO sale_items (sale_id, product_id, name, barcode, qty, srp, unit_price, unit_cost, line_total)
-              VALUES (${saleId.sql}, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO sale_items (sale_id, product_id, name, barcode, qty, srp, unit_price, unit_cost, line_total,
+                                      packs, pack_name, pack_size, pack_price)
+              VALUES (${saleId.sql}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [...saleId.args, l.product.id, l.product.name, l.barcode, l.qty, l.srp,
-               l.unitPrice, l.product.cost, round2(l.unitPrice * l.qty)],
+               l.unitPrice, l.product.cost, l.lineTotal,
+               l.pack?.packs ?? null, l.pack?.name ?? null, l.pack?.size ?? null, l.pack?.price ?? null],
       },
       stmt`UPDATE products SET stock_qty = stock_qty - ${l.qty},
              updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ${l.product.id}`,
@@ -267,15 +322,21 @@ async function tryCheckout(
         args: [l.product.id, -l.qty, ...saleId.args, actor.name, recordedAt],
       }
     );
-    if (Math.abs(l.unitPrice - l.srp) > 0.004) {
-      const diff = round2(l.unitPrice - l.srp);
+    if (l.pack ? Math.abs(l.pack.price - l.pack.listPrice) > 0.004 : Math.abs(l.unitPrice - l.srp) > 0.004) {
+      const [charged, list, label] = l.pack
+        ? [l.pack.price, l.pack.listPrice, `per ${l.pack.name} vs wholesale`]
+        : [l.unitPrice, l.srp, "vs SRP"];
+      const diff = round2(charged - list);
       audits.push(
         receiptAudit({
           actorName: actor.name,
           actorRole: actor.role,
           action: "price.override",
-          summary: `${l.product.name} sold at ${formatCurrency(l.unitPrice)} vs SRP ${formatCurrency(l.srp)} (${diff > 0 ? "+" : ""}${diff.toFixed(2)}) on ${receiptNo}`,
-          details: { receiptNo, productId: l.product.id, name: l.product.name, srp: l.srp, unitPrice: l.unitPrice, qty: l.qty },
+          summary: `${l.product.name} sold at ${formatCurrency(charged)} ${label} ${formatCurrency(list)} (${diff > 0 ? "+" : ""}${diff.toFixed(2)}) on ${receiptNo}`,
+          details: {
+            receiptNo, productId: l.product.id, name: l.product.name, srp: l.srp, unitPrice: l.unitPrice, qty: l.qty,
+            ...(l.pack ? { packs: l.pack.packs, pack: l.pack.name, packPrice: l.pack.price, wholesalePrice: l.pack.listPrice } : {}),
+          },
         })
       );
     }

@@ -231,6 +231,7 @@ class _SalesScreenState extends State<SalesScreen> {
               if (credit != null) WebBadge('Credit · ${credit.$1}', tone: credit.$2),
               if (s.overrideCount > 0) const WebBadge('Price changed', tone: Tone.warn),
               if (s.voided) const WebBadge('Voided', tone: Tone.bad),
+              if (s.priceType == 'wholesale') const WebBadge('Wholesale', tone: Tone.info),
               if (s.source == 'mobile') const WebBadge('Mobile app', tone: Tone.info),
             ],
           ),

@@ -8,7 +8,7 @@ import { attachBarcodeAction } from "@/app/products/actions";
 import { MIN_BARCODE_LENGTH, normalizeBarcode } from "@/lib/barcode";
 import { formatCurrency, formatQty, round2 } from "@/lib/format";
 import { useBarcodeScanner } from "@/lib/useBarcodeScanner";
-import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/types";
+import { PAYMENT_METHODS, hasWholesale, packLabel, type PaymentMethod, type PriceType } from "@/lib/types";
 import { Badge, Spinner, btnPrimary, btnSecondary, inputCls, labelCls } from "./ui";
 import DialogPanel from "./DialogPanel";
 import ProductThumb from "./ProductThumb";
@@ -20,6 +20,9 @@ export interface PosProduct {
   barcode: string | null;
   category_name: string | null;
   srp: number;
+  pack_name: string | null;
+  pack_size: number | null;
+  wholesale_price: number | null;
   stock_qty: number;
   photo_version: string | null;
 }
@@ -32,11 +35,31 @@ export interface PosCustomer {
   credit_limit: number | null;
 }
 
+// A line is sold by the piece, or (wholesale) by the product's pack — then
+// qty counts packs and unitPrice is per pack. A sale can mix both.
 interface CartLine {
   product: PosProduct;
+  byPack: boolean;
   qty: number;
   unitPrice: number;
   barcode: string | null;
+}
+
+const lineKey = (l: CartLine) => `${l.product.id}:${l.byPack ? "pack" : "piece"}`;
+const listPrice = (p: PosProduct, byPack: boolean) => (byPack ? p.wholesale_price! : p.srp);
+const piecesOf = (l: CartLine) => (l.byPack ? l.qty * l.product.pack_size! : l.qty);
+
+// Changes a line's unit (piece ↔ pack), keeping the count and resetting the
+// price to the list price for the new unit; merges with a line already in
+// that unit.
+function switchUnit(cart: CartLine[], target: CartLine, byPack: boolean): CartLine[] {
+  if (target.byPack === byPack || (byPack && !hasWholesale(target.product))) return cart;
+  const moved: CartLine = { ...target, byPack, unitPrice: listPrice(target.product, byPack) };
+  const same = cart.find((l) => l !== target && lineKey(l) === lineKey(moved));
+  return cart
+    .filter((l) => l !== target)
+    .map((l) => (l === same ? { ...l, qty: l.qty + moved.qty } : l))
+    .concat(same ? [] : [moved]);
 }
 
 const METHOD_LABELS: Record<PaymentMethod, string> = {
@@ -62,6 +85,8 @@ export default function PosClient({
   const [method, setMethod] = useState<PaymentMethod>("Cash");
   const [tendered, setTendered] = useState("");
   const [customerId, setCustomerId] = useState<number | null>(null);
+  // Retail or wholesale, chosen per sale by the cashier.
+  const [priceType, setPriceType] = useState<PriceType>("retail");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [unknownCode, setUnknownCode] = useState<string | null>(null);
@@ -95,12 +120,27 @@ export default function PosClient({
     setNotice(null);
     setLastSale(null);
     setFlash((f) => ({ id: product.id, n: (f?.n ?? 0) + 1 }));
+    // Wholesale: products with a pack are added by the pack.
+    const byPack = priceType === "wholesale" && hasWholesale(product);
     setCart((prev) => {
-      const existing = prev.find((l) => l.product.id === product.id);
+      const existing = prev.find((l) => l.product.id === product.id && l.byPack === byPack);
       if (existing) {
         return prev.map((l) => (l === existing ? { ...l, qty: l.qty + 1 } : l));
       }
-      return [...prev, { product, qty: 1, unitPrice: product.srp, barcode }];
+      return [...prev, { product, byPack, qty: 1, unitPrice: listPrice(product, byPack), barcode }];
+    });
+  }
+
+  // Switching the whole sale: lines that can be sold by the pack follow.
+  function choosePriceType(next: PriceType) {
+    setPriceType(next);
+    setCart((prev) => {
+      let lines = prev;
+      for (const l of prev) {
+        const current = lines.find((x) => lineKey(x) === lineKey(l)); // may have merged into another
+        if (current) lines = switchUnit(lines, current, next === "wholesale");
+      }
+      return lines;
     });
   }
 
@@ -138,14 +178,14 @@ export default function PosClient({
   }
   useBarcodeScanner(handleCode);
 
-  const subtotal = round2(cart.reduce((s, l) => s + l.unitPrice * l.qty, 0));
+  const subtotal = round2(cart.reduce((s, l) => s + round2(l.unitPrice * l.qty), 0));
   const discountValue = Math.min(Math.max(discount || 0, 0), subtotal);
   const total = round2(subtotal - discountValue);
   const isCredit = method === "Credit";
   const cashIn = Number(tendered) || 0;
   const tenderedValue = method === "Cash" || isCredit ? cashIn : total;
   const change = round2(tenderedValue - total);
-  const overrides = cart.filter((l) => Math.abs(l.unitPrice - l.product.srp) > 0.004).length;
+  const overrides = cart.filter((l) => Math.abs(l.unitPrice - listPrice(l.product, l.byPack)) > 0.004).length;
 
   const customer = customers.find((c) => c.id === customerId) ?? null;
   const creditAmount = isCredit ? round2(total - cashIn) : 0;
@@ -162,8 +202,15 @@ export default function PosClient({
     setError(null);
   }
 
-  function updateLine(id: number, patch: Partial<CartLine>) {
-    setCart((prev) => prev.map((l) => (l.product.id === id ? { ...l, ...patch } : l)));
+  function updateLine(line: CartLine, patch: Partial<CartLine>) {
+    setCart((prev) => prev.map((l) => (lineKey(l) === lineKey(line) ? { ...l, ...patch } : l)));
+  }
+
+  // The most of this line the stock allows, given the product's other lines.
+  function maxQty(line: CartLine) {
+    const otherPieces = cart.filter((l) => l.product.id === line.product.id && l !== line).reduce((n, l) => n + piecesOf(l), 0);
+    const free = line.product.stock_qty - otherPieces;
+    return line.byPack ? Math.floor(free / line.product.pack_size!) : free;
   }
 
   function checkout() {
@@ -172,10 +219,12 @@ export default function PosClient({
       const result = await checkoutAction({
         items: cart.map((l) => ({
           productId: l.product.id,
-          qty: l.qty,
+          qty: piecesOf(l),
+          packs: l.byPack ? l.qty : null,
           unitPrice: l.unitPrice,
           barcode: l.barcode,
         })),
+        priceType,
         discount: discountValue,
         paymentMethod: method,
         amountTendered: tenderedValue,
@@ -199,6 +248,7 @@ export default function PosClient({
       setMethod("Cash");
       setTendered("");
       setCustomerId(null);
+      setPriceType("retail");
       setQuery("");
       setNotice(null);
       setError(null);
@@ -236,6 +286,7 @@ export default function PosClient({
   }, []);
 
   const itemCount = cart.reduce((n, l) => n + l.qty, 0);
+  const wholesale = priceType === "wholesale";
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_25rem]">
@@ -291,12 +342,24 @@ export default function PosClient({
                 <ProductThumb product={p} className="mb-2 aspect-square h-auto w-full" textClass="text-2xl" />
                 <span className="text-xs text-muted">{p.category_name ?? "Uncategorized"}</span>
                 <span className="mt-0.5 line-clamp-2 min-h-10 text-sm font-medium text-ink">{p.name}</span>
-                <span className="mt-2 flex items-center justify-between">
-                  <span className="font-semibold tabular-nums text-ink">{formatCurrency(p.srp)}</span>
-                  <span className={`text-xs ${out ? "font-medium text-red-600" : "text-muted"}`}>
+                <span className="mt-2 flex flex-wrap items-center justify-between gap-x-2">
+                  <span className="font-semibold tabular-nums text-ink">
+                    {wholesale && hasWholesale(p) ? (
+                      <>
+                        {formatCurrency(p.wholesale_price!)}
+                        <span className="text-xs font-normal text-muted"> / {p.pack_name}</span>
+                      </>
+                    ) : (
+                      formatCurrency(p.srp)
+                    )}
+                  </span>
+                  <span className={`whitespace-nowrap text-xs ${out ? "font-medium text-red-600" : "text-muted"}`}>
                     {out ? "Out of stock" : `${formatQty(p.stock_qty)} in stock`}
                   </span>
                 </span>
+                {wholesale && hasWholesale(p) && (
+                  <span className="mt-0.5 text-xs text-muted">{packLabel(p.pack_name!, p.pack_size!)}</span>
+                )}
               </button>
             );
           })}
@@ -356,19 +419,67 @@ export default function PosClient({
             </button>
           )}
         </div>
+        <div className="border-b border-line px-5 py-3">
+          <div role="radiogroup" aria-label="Price type" className="grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-1">
+            {(["retail", "wholesale"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="radio"
+                aria-checked={priceType === t}
+                onClick={() => choosePriceType(t)}
+                className={`rounded px-3 py-1.5 text-sm font-medium transition ${
+                  priceType === t ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"
+                }`}
+              >
+                {t === "retail" ? "Retail" : "Wholesale"}
+              </button>
+            ))}
+          </div>
+          {wholesale && (
+            <p className="mt-2 text-xs text-muted">
+              Products with a wholesale pack are sold by the pack at the wholesale price; others at their SRP.
+            </p>
+          )}
+        </div>
 
         <div className="max-h-[36vh] divide-y divide-line overflow-y-auto">
           {cart.length === 0 && (
             <p className="px-5 py-10 text-center text-sm text-muted">Scan or select a product to start a sale.</p>
           )}
           {cart.map((l) => {
-            const changed = Math.abs(l.unitPrice - l.product.srp) > 0.004;
+            const list = listPrice(l.product, l.byPack);
+            const changed = Math.abs(l.unitPrice - list) > 0.004;
+            const packable = hasWholesale(l.product);
             return (
-              <div key={l.product.id} className="animate-slide-in px-5 py-3">
+              <div key={lineKey(l)} className="animate-slide-in px-5 py-3">
                 <div className="flex items-start justify-between gap-2">
                   <span className="flex items-center gap-2.5 text-sm font-medium text-ink">
                     <ProductThumb product={l.product} className="h-9 w-9" textClass="text-[10px]" />
-                    {l.product.name}
+                    <span>
+                      {l.product.name}
+                      {packable && (
+                        <span className="mt-0.5 flex items-center gap-1 text-xs font-normal">
+                          {[false, true].map((byPack) => (
+                            <button
+                              key={String(byPack)}
+                              type="button"
+                              onClick={() => setCart((prev) => switchUnit(prev, l, byPack))}
+                              className={`rounded px-1.5 py-0.5 transition ${
+                                l.byPack === byPack ? "bg-brand-soft font-medium text-brand" : "text-muted hover:text-ink"
+                              }`}
+                            >
+                              {byPack ? `By ${l.product.pack_name}` : "By piece"}
+                            </button>
+                          ))}
+                          {l.byPack && (
+                            <span className="text-muted">
+                              · {packLabel(l.product.pack_name!, l.product.pack_size!)} = {formatQty(piecesOf(l))} pcs
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </span>
                   </span>
                   <button
                     type="button"
@@ -385,7 +496,7 @@ export default function PosClient({
                       type="button"
                       aria-label="Decrease quantity"
                       className="px-2.5 py-1 text-muted hover:text-ink"
-                      onClick={() => updateLine(l.product.id, { qty: Math.max(1, l.qty - 1) })}
+                      onClick={() => updateLine(l, { qty: Math.max(1, l.qty - 1) })}
                     >
                       −
                     </button>
@@ -394,7 +505,7 @@ export default function PosClient({
                       type="button"
                       aria-label="Increase quantity"
                       className="px-2.5 py-1 text-muted hover:text-ink"
-                      onClick={() => updateLine(l.product.id, { qty: Math.min(l.product.stock_qty, l.qty + 1) })}
+                      onClick={() => updateLine(l, { qty: Math.max(l.qty, Math.min(maxQty(l), l.qty + 1)) })}
                     >
                       +
                     </button>
@@ -404,27 +515,24 @@ export default function PosClient({
                     type="number"
                     min={0}
                     step="0.01"
-                    aria-label="Unit price"
+                    aria-label={l.byPack ? `Price per ${l.product.pack_name}` : "Unit price"}
                     value={l.unitPrice}
-                    onChange={(e) => updateLine(l.product.id, { unitPrice: Number(e.target.value) })}
+                    onChange={(e) => updateLine(l, { unitPrice: Number(e.target.value) })}
                     className={`w-20 rounded-md border px-2 py-1 text-sm tabular-nums transition-colors duration-200 ${
                       changed ? "border-amber-400 bg-amber-50" : "border-line"
                     }`}
                   />
+                  {l.byPack && <span className="text-xs text-muted">/ {l.product.pack_name}</span>}
                   <span className="ml-auto text-sm font-semibold tabular-nums">
                     {formatCurrency(l.unitPrice * l.qty)}
                   </span>
                 </div>
                 {changed && (
                   <div className="mt-1.5 flex animate-slide-down items-center gap-2 text-xs text-amber-800">
-                    <Badge tone="warn">Not SRP</Badge>
-                    SRP is {formatCurrency(l.product.srp)}.
-                    <button
-                      type="button"
-                      className="underline"
-                      onClick={() => updateLine(l.product.id, { unitPrice: l.product.srp })}
-                    >
-                      Use SRP
+                    <Badge tone="warn">{l.byPack ? "Not wholesale price" : "Not SRP"}</Badge>
+                    {l.byPack ? `Wholesale is ${formatCurrency(list)} / ${l.product.pack_name}.` : `SRP is ${formatCurrency(list)}.`}
+                    <button type="button" className="underline" onClick={() => updateLine(l, { unitPrice: list })}>
+                      {l.byPack ? "Use wholesale price" : "Use SRP"}
                     </button>
                   </div>
                 )}
@@ -436,8 +544,8 @@ export default function PosClient({
         <div className="space-y-3 border-t border-line px-5 py-4">
           {overrides > 0 && (
             <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              {overrides} item{overrides > 1 ? "s are" : " is"} priced differently from the SRP. This will be
-              recorded in the Audit Log.
+              {overrides} item{overrides > 1 ? "s are" : " is"} priced differently from the{" "}
+              {wholesale ? "SRP or wholesale price" : "SRP"}. This will be recorded in the Audit Log.
             </p>
           )}
           <div className="flex justify-between text-sm">

@@ -164,6 +164,29 @@ export default async function SalesReportPage({ searchParams }: PageProps<"/repo
               {r.byMethod.length === 0 && <EmptyRow cols={3} />}
             </tbody>
           </Table>
+          <div className="border-t border-line">
+            <Table>
+              <thead>
+                <tr>
+                  <th>Retail / wholesale</th>
+                  <th className="text-right">Sales</th>
+                  <th className="text-right">Amount</th>
+                  <th className="text-right">Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.byPriceType.map((t) => (
+                  <tr key={t.type}>
+                    <td>{t.type === "wholesale" ? "Wholesale" : "Retail"}</td>
+                    <td className="text-right tabular-nums">{t.count}</td>
+                    <td className="text-right font-medium tabular-nums">{formatCurrency(t.revenue)}</td>
+                    <td className="text-right tabular-nums">{formatCurrency(t.revenue - t.cost)}</td>
+                  </tr>
+                ))}
+                {r.byPriceType.length === 0 && <EmptyRow cols={4} />}
+              </tbody>
+            </Table>
+          </div>
         </Card>
 
         <Card>

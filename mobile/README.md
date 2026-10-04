@@ -15,7 +15,8 @@ get the top bar and ☰ menu, as on the website.
 - **Register** — products beside the current sale (pinned while the products
   scroll); search or scan (a USB/Bluetooth scanner works without tapping the
   search box); change a line's price (flagged "Not SRP", recorded as a price
-  override); checkout by Cash, GCash, Maya, Card or Credit (with optional down
+  override); a Retail / Wholesale switch (wholesale sells by the product's pack
+  — box, case, dozen… — and works offline too); checkout by Cash, GCash, Maya, Card or Credit (with optional down
   payment).
 - **Transactions** — any day's recorded sales with the website's figures,
   filters and badges, plus anything still saved on the tablet.

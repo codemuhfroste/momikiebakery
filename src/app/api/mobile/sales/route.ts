@@ -21,6 +21,7 @@ export async function GET(request: Request) {
         customerName: s.customer_name,
         creditAmount: s.credit_amount,
         creditPaid: s.credit_paid,
+        priceType: s.price_type ?? "retail",
         overrideCount: s.override_count,
         itemCount: s.item_count,
         cashierName: s.cashier_name,

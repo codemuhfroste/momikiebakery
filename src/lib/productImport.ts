@@ -7,6 +7,7 @@ import ExcelJS from "exceljs";
 import { readBatch, runBatch, stmt, type Statement } from "./db";
 import { auditStmt } from "./audit";
 import { ensureCategory } from "./categories";
+import { readWholesale } from "./products";
 import { normalizeBarcode } from "./barcode";
 import { round2 } from "./format";
 import type { Actor } from "./checkout";
@@ -22,6 +23,9 @@ const COLUMNS = [
   { key: "cost", header: "Cost (₱)" },
   { key: "qty", header: "Quantity on hand" },
   { key: "reorder", header: "Reorder level" },
+  { key: "packName", header: "Wholesale unit (box, dozen…)" },
+  { key: "packSize", header: "Pieces per unit" },
+  { key: "wholesalePrice", header: "Wholesale price (₱)" },
   { key: "active", header: "Active (Yes/No)" },
 ] as const;
 type Key = (typeof COLUMNS)[number]["key"];
@@ -43,14 +47,22 @@ export async function buildTemplate(products: Product[], categories: Category[],
   );
   const rows = [...products]
     .sort((a, b) => (a.category_name ?? "~").localeCompare(b.category_name ?? "~") || a.name.localeCompare(b.name))
-    .map((p) => [p.name, p.category_name, p.barcode, p.sku, p.srp, p.cost, p.stock_qty, p.reorder_level, p.is_active ? "Yes" : "No"]);
+    .map((p) => [
+      p.name, p.category_name, p.barcode, p.sku, p.srp, p.cost, p.stock_qty, p.reorder_level,
+      p.pack_name, p.pack_size, p.wholesale_price, p.is_active ? "Yes" : "No",
+    ]);
   // Room to type new products straight under the existing ones.
-  for (let i = 0; i < BLANK_ROWS; i++) rows.push([null, null, null, null, null, null, null, null, null]);
+  for (let i = 0; i < BLANK_ROWS; i++) rows.push(COLUMNS.map(() => null));
   const headerRow = addTable(
     sheet,
     COLUMNS.map((c) => ({
       header: c.header,
-      kind: c.key === "srp" || c.key === "cost" ? ("peso" as const) : c.key === "qty" || c.key === "reorder" ? ("qty" as const) : undefined,
+      kind:
+        c.key === "srp" || c.key === "cost" || c.key === "wholesalePrice"
+          ? ("peso" as const)
+          : c.key === "qty" || c.key === "reorder" || c.key === "packSize"
+            ? ("qty" as const)
+            : undefined,
       width: c.key === "name" ? 34 : c.key === "category" ? 22 : c.key === "barcode" ? 18 : undefined,
     })),
     rows,
@@ -82,8 +94,15 @@ export async function buildTemplate(products: Product[], categories: Category[],
         showErrorMessage: false, // a new category name is fine; it gets created
       };
     }
-    sheet.getCell(r, 9).dataValidation = { type: "list", allowBlank: true, formulae: ['"Yes,No"'] };
-    for (const col of [5, 6, 7, 8]) {
+    sheet.getCell(r, 12).dataValidation = { type: "list", allowBlank: true, formulae: ['"Yes,No"'] };
+    // Common wholesale units; any other word is fine too.
+    sheet.getCell(r, 9).dataValidation = {
+      type: "list",
+      allowBlank: true,
+      formulae: ['"box,case,pack,dozen,tray,sack,bundle"'],
+      showErrorMessage: false,
+    };
+    for (const col of [5, 6, 7, 8, 10, 11]) {
       sheet.getCell(r, col).dataValidation = {
         type: "decimal",
         operator: "greaterThanOrEqual",
@@ -112,6 +131,7 @@ export async function buildTemplate(products: Product[], categories: Category[],
     ["Cost (₱)", "What one item costs the store. Used for profit figures."],
     ["Quantity on hand", "Used only when ADDING a new product. Stock of existing products is changed on the Inventory page, so re-uploading an old copy of this file never overwrites today's stock."],
     ["Reorder level", "When stock falls to this number the product is marked Low stock."],
+    ["Wholesale unit, pieces, price", "Optional, for selling in bulk: the unit (box, case, dozen, tray…), how many pieces are in one, and the price for one. Fill in all three, or leave all three empty for retail only. Stock stays counted in pieces."],
     ["Active (Yes/No)", "No hides the product from the register. Blank means Yes."],
     ["Updating products", "A row updates an existing product when its barcode, SKU, or exact name matches. Otherwise it is added as new."],
     ["Before anything is saved", "The website shows a preview of every new, changed and rejected row. Nothing changes until you confirm."],
@@ -143,6 +163,9 @@ export interface ImportRow {
   qty: number | null;
   reorder: number | null;
   active: boolean | null;
+  // Wholesale pack: null = none (retail only); undefined = the file has no
+  // wholesale columns, so leave it as it is.
+  wholesale?: { packName: string; packSize: number; wholesalePrice: number } | null;
 }
 
 function cellText(v: ExcelJS.CellValue): string {
@@ -200,7 +223,7 @@ export async function readImportFile(buffer: ArrayBuffer): Promise<{ rows: Impor
     const row = sheet.getRow(r);
     const get = (k: Key) => (colOf.has(k) ? row.getCell(colOf.get(k)!).value : null);
     const name = cellText(get("name")).replace(/\s+/g, " ");
-    const others = (["category", "barcode", "sku", "srp", "cost", "qty", "reorder"] as Key[]).some((k) => cellText(get(k)) !== "");
+    const others = (["category", "barcode", "sku", "srp", "cost", "qty", "reorder", "packName", "packSize", "wholesalePrice"] as Key[]).some((k) => cellText(get(k)) !== "");
     if (!name && !others) continue; // blank row
     if (rows.length + errors.length >= MAX_ROWS) {
       errors.push(`Only the first ${MAX_ROWS} rows are read; split bigger lists into several files.`);
@@ -221,6 +244,11 @@ export async function readImportFile(buffer: ArrayBuffer): Promise<{ rows: Impor
     }
     const activeText = cellText(get("active")).toLowerCase();
     if (activeText && !["yes", "no", "y", "n", "true", "false", "1", "0"].includes(activeText)) problems.push('Active must be "Yes" or "No"');
+    const hasWsColumns = colOf.has("packName") && colOf.has("packSize") && colOf.has("wholesalePrice");
+    const ws = hasWsColumns
+      ? readWholesale(cellText(get("packName")), cellText(get("packSize")).replace(/[,\s]/g, ""), cellText(get("wholesalePrice")).replace(/[₱,\s]/g, ""))
+      : null;
+    if (ws && "error" in ws) problems.push(ws.error.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase()));
     if (problems.length) {
       errors.push(`Row ${r}${name ? ` (${name})` : ""}: ${problems.join("; ")}.`);
       continue;
@@ -238,12 +266,31 @@ export async function readImportFile(buffer: ArrayBuffer): Promise<{ rows: Impor
       qty: qty === null || qty === "bad" ? null : qty,
       reorder: reorder === null || reorder === "bad" ? null : reorder,
       active: activeText ? ["yes", "y", "true", "1"].includes(activeText) : null,
+      wholesale:
+        !ws || "error" in ws
+          ? undefined
+          : ws.packName
+            ? { packName: ws.packName, packSize: ws.packSize!, wholesalePrice: ws.wholesalePrice! }
+            : null,
     });
   }
   return { rows, errors };
 }
 
 // ------------------------------------------------------------- planning
+
+type Wholesale = { packName: string; packSize: number; wholesalePrice: number } | null;
+
+function productWholesale(p: Product): Wholesale {
+  return p.pack_name && p.pack_size && p.wholesale_price != null
+    ? { packName: p.pack_name, packSize: p.pack_size, wholesalePrice: p.wholesale_price }
+    : null;
+}
+
+// "₱240.00 per box of 24", or "none".
+function wsText(w: Wholesale | undefined): string {
+  return w ? `₱${w.wholesalePrice.toFixed(2)} per ${w.packName} of ${w.packSize}` : "none";
+}
 
 export interface PlannedChange {
   row: number;
@@ -325,6 +372,7 @@ export async function planImport(rows: ImportRow[], fileErrors: string[]): Promi
           ...(r.category ? [r.category] : []),
           ...(r.qty ? [`${r.qty} on hand`] : []),
           ...(r.barcode ? [`barcode ${r.barcode}`] : []),
+          ...(r.wholesale ? [`wholesale ${wsText(r.wholesale)}`] : []),
         ],
       });
       continue;
@@ -339,6 +387,9 @@ export async function planImport(rows: ImportRow[], fileErrors: string[]): Promi
     if (r.sku && r.sku !== match.sku) diff.push(`SKU → ${r.sku}`);
     if (r.reorder != null && Math.abs(r.reorder - match.reorder_level) > 0.0001) diff.push(`reorder level → ${r.reorder}`);
     if (r.active != null && r.active !== !!match.is_active) diff.push(r.active ? "re-activated" : "deactivated");
+    if (r.wholesale !== undefined && wsText(r.wholesale) !== wsText(productWholesale(match))) {
+      diff.push(`wholesale → ${wsText(r.wholesale)}`);
+    }
     changes.push({ row: r.row, name: r.name, action: diff.length ? "update" : "same", productId: match.id, changes: diff });
   }
   return { changes, errors, newCategories: [...newCategories.values()] };
@@ -367,9 +418,11 @@ export async function applyImport(actor: Actor, rows: ImportRow[], plan: ImportP
       if (c.action === "add") {
         batch.push(
           {
-            sql: `INSERT INTO products (name, category_id, barcode, sku, srp, cost, stock_qty, reorder_level, is_active)
-                  VALUES (?, ${catSql.sql}, ?, ?, ?, ?, ?, ?, ?)`,
-            args: [r.name, ...catSql.args, r.barcode, r.sku, r.srp, r.cost ?? 0, r.qty ?? 0, r.reorder ?? 0, r.active === false ? 0 : 1],
+            sql: `INSERT INTO products (name, category_id, barcode, sku, srp, cost, stock_qty, reorder_level, is_active,
+                                        pack_name, pack_size, wholesale_price)
+                  VALUES (?, ${catSql.sql}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            args: [r.name, ...catSql.args, r.barcode, r.sku, r.srp, r.cost ?? 0, r.qty ?? 0, r.reorder ?? 0, r.active === false ? 0 : 1,
+                   r.wholesale?.packName ?? null, r.wholesale?.packSize ?? null, r.wholesale?.wholesalePrice ?? null],
           },
           stmt`INSERT INTO price_history (product_id, old_srp, new_srp, actor_name) VALUES (last_insert_rowid(), ${null}, ${r.srp}, ${actor.name})`
         );
@@ -382,9 +435,21 @@ export async function applyImport(actor: Actor, rows: ImportRow[], plan: ImportP
       } else {
         const p = byId.get(c.productId!)!;
         const srp = r.srp ?? p.srp;
+        const ws = r.wholesale === undefined ? productWholesale(p) : r.wholesale;
+        if (wsText(ws) !== wsText(productWholesale(p))) {
+          batch.push(
+            auditStmt({
+              ...who,
+              action: "price.wholesale_change",
+              summary: `Wholesale price of ${r.name} changed: ${wsText(productWholesale(p))} → ${wsText(ws)} (Excel import)`,
+              details: { productId: p.id, before: wsText(productWholesale(p)), after: wsText(ws) },
+            })
+          );
+        }
         batch.push({
           sql: `UPDATE products SET name = ?, category_id = ${r.category != null ? catSql.sql : "category_id"},
                   barcode = ?, sku = ?, srp = ?, cost = ?, reorder_level = ?, is_active = ?,
+                  pack_name = ?, pack_size = ?, wholesale_price = ?,
                   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
                 WHERE id = ?`,
           args: [
@@ -396,6 +461,9 @@ export async function applyImport(actor: Actor, rows: ImportRow[], plan: ImportP
             r.cost ?? p.cost,
             r.reorder ?? p.reorder_level,
             r.active == null ? p.is_active : r.active ? 1 : 0,
+            ws?.packName ?? null,
+            ws?.packSize ?? null,
+            ws?.wholesalePrice ?? null,
             p.id,
           ],
         });

@@ -26,6 +26,29 @@ export interface Product {
   reorder_level: number;
   is_active: number; // 0/1
   photo_version: string | null; // null = no photo
+  // Wholesale: sold by the pack (box, case, dozen, tray…) of pack_size
+  // pieces at wholesale_price per pack. All null = retail only.
+  pack_name: string | null;
+  pack_size: number | null;
+  wholesale_price: number | null;
+}
+
+export type PriceType = "retail" | "wholesale";
+
+// The product can be sold wholesale (it has a pack and a pack price).
+export function hasWholesale(p: Pick<Product, "pack_name" | "pack_size" | "wholesale_price">): boolean {
+  return !!p.pack_name && (p.pack_size ?? 0) > 0 && p.wholesale_price != null;
+}
+
+// "box" → "boxes", "tray" → "trays"; "dozen" stays "dozen" ("2 dozen").
+export function packPlural(name: string, count: number): string {
+  if (count === 1 || /dozen$/i.test(name)) return name;
+  return /(s|x|z|ch|sh)$/i.test(name) ? `${name}es` : `${name}s`;
+}
+
+// "box of 24"
+export function packLabel(name: string, size: number): string {
+  return `${name} of ${Number.isInteger(size) ? size : size.toFixed(2)}`;
 }
 
 // URL of a product's photo, or null if it has none. The version is in the URL
@@ -37,6 +60,7 @@ export function productPhotoUrl(p: { id: number; photo_version: string | null })
 export interface Sale {
   id: number;
   receipt_no: string;
+  price_type: PriceType;
   subtotal: number;
   discount: number;
   total: number;
@@ -100,6 +124,10 @@ export interface CreditItem {
   qty: number;
   unit_price: number;
   line_total: number;
+  packs: number | null;
+  pack_name: string | null;
+  pack_size: number | null;
+  pack_price: number | null;
 }
 
 // A credit sale that still has something left to pay.
@@ -131,11 +159,28 @@ export interface SaleItem {
   product_id: number | null;
   name: string; // snapshot at time of sale
   barcode: string | null;
-  qty: number;
-  srp: number; // SRP at time of sale
-  unit_price: number; // what was actually charged
+  qty: number; // pieces, also for a line sold by the pack
+  srp: number; // list price per piece at the time (SRP, or wholesale price ÷ pack size)
+  unit_price: number; // what was actually charged per piece
   unit_cost: number;
   line_total: number;
+  // Set when the line was sold by the pack (wholesale): e.g. 2 × "box" of 24 at ₱240.
+  packs: number | null;
+  pack_name: string | null;
+  pack_size: number | null;
+  pack_price: number | null; // charged per pack
+}
+
+// How a line reads on a receipt: "2 boxes of 24 × ₱240.00" or "3 × ₱12.00".
+export function lineQuantityText(
+  i: Pick<SaleItem, "qty" | "unit_price" | "packs" | "pack_name" | "pack_size" | "pack_price">,
+  money: (n: number) => string,
+  qty: (n: number) => string
+): string {
+  if (i.packs != null && i.pack_name && i.pack_size && i.pack_price != null) {
+    return `${qty(i.packs)} ${packPlural(i.pack_name, i.packs)} of ${qty(i.pack_size)} × ${money(i.pack_price)}`;
+  }
+  return `${qty(i.qty)} × ${money(i.unit_price)}`;
 }
 
 export interface StockMovement {

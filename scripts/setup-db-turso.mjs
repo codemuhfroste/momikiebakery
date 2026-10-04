@@ -195,6 +195,17 @@ const addedColumns = [
   ["sales", "source", "TEXT NOT NULL DEFAULT 'web'"],
   ["sales", "sync_note", "TEXT"],
   ["credit_ledger", "client_uuid", "TEXT"],
+  // Wholesale: a product's pack (box, case, dozen, tray…), pieces per pack
+  // and price per pack; each sale is retail or wholesale; a line sold by the
+  // pack keeps how many packs at what price (its qty is still in pieces).
+  ["products", "pack_name", "TEXT"],
+  ["products", "pack_size", "REAL"],
+  ["products", "wholesale_price", "REAL"],
+  ["sales", "price_type", "TEXT NOT NULL DEFAULT 'retail'"],
+  ["sale_items", "packs", "REAL"],
+  ["sale_items", "pack_name", "TEXT"],
+  ["sale_items", "pack_size", "REAL"],
+  ["sale_items", "pack_price", "REAL"],
 ];
 for (const [table, column, type] of addedColumns) {
   const { rows } = await db.execute(`PRAGMA table_info(${table})`);

@@ -68,7 +68,9 @@ export default function Modal({
         // Clicks inside must never reach the backdrop handler, or typing in
         // the form would arm (and then trigger) the close.
         onMouseDown={(e) => e.stopPropagation()}
-        className="my-auto w-full max-w-2xl animate-scale-in rounded-lg bg-surface shadow-xl"
+        // The dialog can be opened from inside a table cell (e.g. Edit on the
+        // Products list); reset what the cell sets so text wraps and reads left.
+        className="my-auto w-full max-w-2xl animate-scale-in whitespace-normal rounded-lg bg-surface text-left font-normal shadow-xl"
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-6 py-4">
           <div>

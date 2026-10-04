@@ -31,6 +31,15 @@ after the Gemellus Cashflow repo.
 - **Inventory** (`/inventory`) — stock levels with low/out status, restock,
   spoilage and count corrections; every change is a stock movement.
 - **Products** (`/products`) — catalog with barcode, SKU, cost, SRP, margin.
+- **Retail and wholesale** — a product can also be sold by its wholesale pack
+  (box, case, dozen, tray… of N pieces) at a wholesale price per pack. At the
+  Register the cashier switches the sale to **Wholesale**: products with a pack
+  are added by the pack, others at their SRP, and any line can be switched
+  between piece and pack. Stock stays counted in pieces (1 box of 24 takes 24
+  off), so stock, cost and profit work the same. A wholesale line is only
+  flagged as a price change if charged other than the wholesale price. Receipts
+  show "2 boxes of 24 × ₱240.00"; Transactions mark wholesale sales; the Sales
+  Report and its Excel file split retail and wholesale.
 - **Import from Excel** (`/products/import`) — download the product sheet (every
   product plus blank rows, with category and Yes/No dropdowns), edit it in Excel or
   Google Sheets, upload it, check the preview (new / updated / skipped rows), then

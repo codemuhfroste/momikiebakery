@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canManage, getSession } from "@/lib/rbac";
 import { getSalesExportRows, getSalesReport } from "@/lib/reports";
 import { formatDate, manilaToday } from "@/lib/format";
+import { packPlural } from "@/lib/types";
 import { addBanner, addSubtext, addTable, manilaExcelDate, newWorkbook, stamp, workbookResponse, type Cell } from "@/lib/excel";
 
 // GET /api/reports/export?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -73,6 +74,14 @@ export async function GET(request: NextRequest) {
     { totals: ["Sales", "Amount"], freeze: false, filter: false }
   );
   sum.addRow([]);
+  addBanner(sum, "Retail and wholesale", 4, 11);
+  addTable(
+    sum,
+    [{ header: "Type" }, { header: "Sales", kind: "int" }, { header: "Amount", kind: "peso" }, { header: "Profit", kind: "peso" }],
+    report.byPriceType.map((t) => [t.type === "wholesale" ? "Wholesale" : "Retail", t.count, t.revenue, t.revenue - t.cost]),
+    { totals: ["Sales", "Amount", "Profit"], freeze: false, filter: false }
+  );
+  sum.addRow([]);
   addBanner(sum, "Best sellers (top 15)", 4, 11);
   addTable(
     sum,
@@ -86,7 +95,7 @@ export async function GET(request: NextRequest) {
   const ss = wb.addWorksheet("Sales");
   const salesCols = [
     { header: "Receipt" }, { header: "Date & time", kind: "date" as const }, { header: "Cashier" }, { header: "Customer" },
-    { header: "Payment" }, { header: "Items", width: 48 }, { header: "Subtotal", kind: "peso" as const },
+    { header: "Retail / wholesale" }, { header: "Payment" }, { header: "Items", width: 48 }, { header: "Subtotal", kind: "peso" as const },
     { header: "Discount", kind: "peso" as const }, { header: "Total", kind: "peso" as const },
     { header: "Paid now", kind: "peso" as const }, { header: "On credit", kind: "peso" as const },
     { header: "Status" }, { header: "Void reason" }, { header: "Source" }, { header: "Note" },
@@ -98,7 +107,7 @@ export async function GET(request: NextRequest) {
     salesCols,
     sales.map((r): Cell[] => [
       r.receipt_no as string, manilaExcelDate(r.created_at as string), r.cashier_name as string, r.customer as string,
-      r.payment_method as string, r.items as string, r.subtotal as number, r.discount as number,
+      r.price_type === "wholesale" ? "Wholesale" : "Retail", r.payment_method as string, r.items as string, r.subtotal as number, r.discount as number,
       r.voided_at ? null : (r.total as number), r.amount_tendered as number, r.voided_at ? null : (r.credit_amount as number),
       r.voided_at ? "Voided" : "Completed", r.void_reason as string, r.source === "mobile" ? "Mobile app" : "Website", r.sync_note as string,
     ]),
@@ -109,8 +118,8 @@ export async function GET(request: NextRequest) {
   const is = wb.addWorksheet("Items sold");
   const itemCols = [
     { header: "Receipt" }, { header: "Date & time", kind: "date" as const }, { header: "Product", width: 32 }, { header: "Category" },
-    { header: "Barcode" }, { header: "Qty", kind: "qty" as const }, { header: "SRP", kind: "peso" as const },
-    { header: "Price charged", kind: "peso" as const }, { header: "Line total", kind: "peso" as const },
+    { header: "Barcode" }, { header: "Sold as" }, { header: "Qty (pieces)", kind: "qty" as const },
+    { header: "List price", kind: "peso" as const }, { header: "Price charged", kind: "peso" as const }, { header: "Line total", kind: "peso" as const },
     { header: "Cost", kind: "peso" as const }, { header: "Profit", kind: "peso" as const }, { header: "Status" },
   ];
   addBanner(is, `Items sold — ${period}`, itemCols.length);
@@ -123,11 +132,17 @@ export async function GET(request: NextRequest) {
       const cost = Number(r.unit_cost) * Number(r.qty);
       return [
         r.receipt_no as string, manilaExcelDate(r.created_at as string), r.name as string, r.category as string,
-        r.barcode as string, Number(r.qty), Number(r.srp), Number(r.unit_price), r.voided_at ? null : line,
+        r.barcode as string,
+        r.packs != null ? `${r.packs} ${packPlural(String(r.pack_name), Number(r.packs))} of ${r.pack_size}` : "Piece",
+        Number(r.qty),
+        // Per pack for a pack line, per piece otherwise.
+        r.packs != null ? Number(r.srp) * Number(r.pack_size) : Number(r.srp),
+        r.packs != null ? Number(r.pack_price) : Number(r.unit_price),
+        r.voided_at ? null : line,
         r.voided_at ? null : cost, r.voided_at ? null : Math.round((line - cost) * 100) / 100, r.voided_at ? "Voided" : "",
       ];
     }),
-    { totals: ["Qty", "Line total", "Cost", "Profit"] }
+    { totals: ["Qty (pieces)", "Line total", "Cost", "Profit"] }
   );
 
   const name = `momikie-sales-${from}${from === to ? "" : `-to-${to}`}.xlsx`;

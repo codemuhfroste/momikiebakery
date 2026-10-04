@@ -103,6 +103,49 @@ export default function ProductForm({
           <input name="cost" type="number" step="0.01" min={0} defaultValue={product?.cost ?? 0} className={inputCls} />
         </div>
       </div>
+      <fieldset className="min-w-0 rounded-lg border border-line p-4 sm:col-span-2">
+        <legend className="px-1 text-sm font-medium text-ink">Wholesale (optional)</legend>
+        <p className={`${hintCls} mb-3`}>
+          For selling in bulk: the unit it&apos;s sold in, how many pieces it holds, and its price. Stock stays
+          counted in pieces — selling 1 box of 24 takes 24 off. Leave empty if it&apos;s only sold retail.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label className={labelCls} htmlFor="pack_name">Sold by the</label>
+            <input
+              id="pack_name"
+              name="pack_name"
+              list="pack-names"
+              maxLength={20}
+              defaultValue={product?.pack_name ?? ""}
+              placeholder="box, case, dozen, tray…"
+              className={inputCls}
+            />
+            <datalist id="pack-names">
+              {["box", "case", "pack", "dozen", "tray", "sack", "bundle", "ream"].map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="pack_size">Pieces in one</label>
+            <input id="pack_size" name="pack_size" type="number" step="any" min={2} defaultValue={product?.pack_size ?? ""} placeholder="e.g. 24" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="wholesale_price">Wholesale price (₱ each)</label>
+            <input
+              id="wholesale_price"
+              name="wholesale_price"
+              type="number"
+              step="0.01"
+              min={0}
+              defaultValue={product?.wholesale_price ?? ""}
+              placeholder="e.g. 240.00"
+              className={inputCls}
+            />
+          </div>
+        </div>
+      </fieldset>
       {!product && (
         <div>
           <label className={labelCls}>Quantity on hand</label>

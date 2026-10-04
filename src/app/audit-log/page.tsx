@@ -16,6 +16,7 @@ const FILTERS: { key: AuditFilter; label: string }[] = [
 const ACTION_LABELS: Record<string, { label: string; tone: "neutral" | "good" | "warn" | "bad" | "info" }> = {
   "price.override": { label: "Sold at other than SRP", tone: "warn" },
   "price.srp_change": { label: "SRP changed", tone: "info" },
+  "price.wholesale_change": { label: "Wholesale price changed", tone: "info" },
   "product.cost_change": { label: "Cost changed", tone: "info" },
   "product.create": { label: "Product added", tone: "neutral" },
   "product.update": { label: "Product edited", tone: "neutral" },

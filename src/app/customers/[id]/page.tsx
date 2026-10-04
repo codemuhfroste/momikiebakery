@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { canManage, requireSessionOrRedirect } from "@/lib/rbac";
 import { getCreditItems, getCustomer, getLedger, getOpenCreditSales } from "@/lib/queries";
 import { formatCurrency, formatDate, formatDateTime, formatQty } from "@/lib/format";
-import { CREDIT_STATUS_LABELS, accountStatus, creditPaymentStatus, type CreditItem } from "@/lib/types";
+import { CREDIT_STATUS_LABELS, accountStatus, creditPaymentStatus, type CreditItem, lineQuantityText, packPlural } from "@/lib/types";
 import { Badge, Card, CardHeader, EmptyState, PageHeader, Stat, Tabs, tableCls, btnSecondary } from "@/components/ui";
 import CustomerForm from "@/components/CustomerForm";
 import CreditPaymentForm from "@/components/CreditPaymentForm";
@@ -132,7 +132,7 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
                                     {items.map((i) => (
                                       <li key={i.item_id} className="flex justify-between gap-4">
                                         <span>
-                                          {formatQty(i.qty)} × {i.name} @ {formatCurrency(i.unit_price)}
+                                          {i.name} — {lineQuantityText(i, formatCurrency, formatQty)}
                                         </span>
                                         <span className="tabular-nums">{formatCurrency(i.line_total)}</span>
                                       </li>
@@ -232,8 +232,16 @@ export default async function CustomerPage({ params, searchParams }: PageProps<"
                             </Link>
                           </td>
                           <td>{i.name}</td>
-                          <td className="text-right tabular-nums">{formatQty(i.qty)}</td>
-                          <td className="text-right tabular-nums">{formatCurrency(i.unit_price)}</td>
+                          <td className="text-right tabular-nums">
+                            {i.packs != null && i.pack_name
+                              ? `${formatQty(i.packs)} ${packPlural(i.pack_name, i.packs)}`
+                              : formatQty(i.qty)}
+                          </td>
+                          <td className="text-right tabular-nums">
+                            {i.pack_price != null && i.pack_name
+                              ? `${formatCurrency(i.pack_price)} / ${i.pack_name}`
+                              : formatCurrency(i.unit_price)}
+                          </td>
                           <td className={`px-4 py-2.5 text-right tabular-nums ${i.voided ? "line-through" : ""}`}>
                             {formatCurrency(i.line_total)}
                           </td>

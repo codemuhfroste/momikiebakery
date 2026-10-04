@@ -27,6 +27,11 @@ class Product {
   final double stockQty;
   final double reorderLevel;
   final String? photoVersion;
+  // Wholesale: sold by the pack (box, case, dozen, tray…) of packSize pieces
+  // at wholesalePrice per pack. Null = retail only.
+  final String? packName;
+  final double? packSize;
+  final double? wholesalePrice;
 
   const Product({
     required this.id,
@@ -38,7 +43,15 @@ class Product {
     required this.stockQty,
     required this.reorderLevel,
     this.photoVersion,
+    this.packName,
+    this.packSize,
+    this.wholesalePrice,
   });
+
+  bool get hasWholesale => packName != null && (packSize ?? 0) > 0 && wholesalePrice != null;
+
+  /// "box of 24"
+  String get packLabel => '$packName of ${_num(packSize ?? 0)}';
 
   factory Product.fromJson(Json j) => Product(
         id: (j['id'] as num).toInt(),
@@ -50,6 +63,9 @@ class Product {
         stockQty: _d(j['stock_qty']),
         reorderLevel: _d(j['reorder_level']),
         photoVersion: _s(j['photo_version']),
+        packName: _s(j['pack_name']),
+        packSize: _dn(j['pack_size']),
+        wholesalePrice: _dn(j['wholesale_price']),
       );
 
   Json toJson() => {
@@ -62,6 +78,9 @@ class Product {
         'stock_qty': stockQty,
         'reorder_level': reorderLevel,
         'photo_version': photoVersion,
+        'pack_name': packName,
+        'pack_size': packSize,
+        'wholesale_price': wholesalePrice,
       };
 
   Product withStock(double stock) => Product(
@@ -74,7 +93,18 @@ class Product {
         stockQty: stock,
         reorderLevel: reorderLevel,
         photoVersion: photoVersion,
+        packName: packName,
+        packSize: packSize,
+        wholesalePrice: wholesalePrice,
       );
+}
+
+String _num(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+/// "box" → "boxes", "tray" → "trays"; "dozen" stays "dozen".
+String packPlural(String name, num count) {
+  if (count == 1 || name.toLowerCase().endsWith('dozen')) return name;
+  return RegExp(r'(s|x|z|ch|sh)$', caseSensitive: false).hasMatch(name) ? '${name}es' : '${name}s';
 }
 
 class Customer {
@@ -135,15 +165,21 @@ class Customer {
       );
 }
 
-/// A line in the current sale. The price starts at the SRP; changing it is
-/// allowed (as on the website) and the server records it as a price override.
+/// A line in the current sale: by the piece, or (wholesale) by the product's
+/// pack — then [qty] counts packs and [unitPrice] is per pack. The price
+/// starts at the list price (SRP or wholesale price); changing it is allowed
+/// (as on the website) and the server records it as a price override.
 class CartLine {
   final Product product;
+  final bool byPack;
   double qty;
   double unitPrice;
-  CartLine(this.product, this.qty, {double? unitPrice}) : unitPrice = unitPrice ?? product.srp;
+  CartLine(this.product, this.qty, {this.byPack = false, double? unitPrice})
+      : unitPrice = unitPrice ?? (byPack ? product.wholesalePrice! : product.srp);
+  double get listPrice => byPack ? product.wholesalePrice! : product.srp;
+  double get pieces => byPack ? qty * product.packSize! : qty;
   double get total => round2(unitPrice * qty);
-  bool get priceChanged => (unitPrice - product.srp).abs() > 0.004;
+  bool get priceChanged => (unitPrice - listPrice).abs() > 0.004;
 }
 
 /// A sale saved on the phone and waiting to be sent (or one the server
@@ -158,6 +194,7 @@ class PendingSale {
   final int? customerId;
   final String? customerName;
   final double total;
+  final String priceType; // "retail" | "wholesale"
   String status; // "pending" | "rejected"
   String? error;
 
@@ -171,6 +208,7 @@ class PendingSale {
     this.customerId,
     this.customerName,
     required this.total,
+    this.priceType = 'retail',
     this.status = 'pending',
     this.error,
   });
@@ -186,6 +224,7 @@ class PendingSale {
         'paymentMethod': paymentMethod,
         'amountTendered': amountTendered,
         'customerId': customerId,
+        'priceType': priceType,
       };
 
   Json toJson() => {
@@ -206,6 +245,7 @@ class PendingSale {
         customerId: (j['customerId'] as num?)?.toInt(),
         customerName: _s(j['customerName']),
         total: _d(j['total']),
+        priceType: '${j['priceType'] ?? 'retail'}',
         status: '${j['status'] ?? 'pending'}',
         error: _s(j['error']),
       );
@@ -214,7 +254,8 @@ class PendingSale {
 class PendingSaleItem {
   final int productId;
   final String name;
-  final double qty;
+  final double qty; // pieces
+  final double? packs; // set when sold by the pack; unitPrice and srp are then per pack
   final double unitPrice;
   final double srp;
   final String? barcode;
@@ -223,18 +264,27 @@ class PendingSaleItem {
     required this.productId,
     required this.name,
     required this.qty,
+    this.packs,
     required this.unitPrice,
     required this.srp,
     this.barcode,
   });
 
-  Json toJson() =>
-      {'productId': productId, 'name': name, 'qty': qty, 'unitPrice': unitPrice, 'srp': srp, 'barcode': barcode};
+  Json toJson() => {
+        'productId': productId,
+        'name': name,
+        'qty': qty,
+        if (packs != null) 'packs': packs,
+        'unitPrice': unitPrice,
+        'srp': srp,
+        'barcode': barcode,
+      };
 
   factory PendingSaleItem.fromJson(Json j) => PendingSaleItem(
         productId: (j['productId'] as num).toInt(),
         name: '${j['name']}',
         qty: _d(j['qty']),
+        packs: _dn(j['packs']),
         unitPrice: _d(j['unitPrice']),
         srp: _d(j['srp']),
         barcode: _s(j['barcode']),
@@ -325,6 +375,7 @@ class ServerSale {
   final String paymentMethod;
   final String? customerName;
   final String? cashierName;
+  final String priceType;
   final double creditAmount;
   final double creditPaid;
   final int overrideCount;
@@ -341,6 +392,7 @@ class ServerSale {
     required this.paymentMethod,
     this.customerName,
     this.cashierName,
+    this.priceType = 'retail',
     required this.creditAmount,
     this.creditPaid = 0,
     this.overrideCount = 0,
@@ -358,6 +410,7 @@ class ServerSale {
         paymentMethod: '${j['paymentMethod']}',
         customerName: _s(j['customerName']),
         cashierName: _s(j['cashierName']),
+        priceType: '${j['priceType'] ?? 'retail'}',
         creditAmount: _d(j['creditAmount']),
         creditPaid: _d(j['creditPaid']),
         overrideCount: _d(j['overrideCount']).toInt(),
@@ -375,6 +428,7 @@ class ServerSale {
         'paymentMethod': paymentMethod,
         'customerName': customerName,
         'cashierName': cashierName,
+        'priceType': priceType,
         'creditAmount': creditAmount,
         'creditPaid': creditPaid,
         'overrideCount': overrideCount,

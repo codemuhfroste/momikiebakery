@@ -35,6 +35,25 @@ function categoryFor(fd: FormData): { error: string } | { pre: Statement[]; id: 
   return { pre: [], id: { sql: "?", args: [Number.isFinite(id) ? id : null] } };
 }
 
+// The optional wholesale pack: all three fields, or none (retail only).
+export function readWholesale(
+  name: unknown,
+  size: unknown,
+  price: unknown
+): { error: string } | { packName: string | null; packSize: number | null; wholesalePrice: number | null } {
+  const packName = String(name ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  const sizeText = String(size ?? "").trim();
+  const priceText = String(price ?? "").trim();
+  if (!packName && !sizeText && !priceText) return { packName: null, packSize: null, wholesalePrice: null };
+  const packSize = Number(sizeText);
+  const wholesalePrice = Number(priceText);
+  if (!packName) return { error: "Name the wholesale unit (e.g. box, case, dozen, tray), or clear the wholesale fields." };
+  if (packName.length > 20) return { error: "Keep the wholesale unit name short (e.g. box, tray)." };
+  if (!sizeText || !(packSize > 1) || !Number.isFinite(packSize)) return { error: "Enter how many pieces are in one wholesale unit (2 or more)." };
+  if (!priceText || !(wholesalePrice >= 0) || !Number.isFinite(wholesalePrice)) return { error: "Enter the wholesale price for one unit." };
+  return { packName, packSize, wholesalePrice: round2(wholesalePrice) };
+}
+
 function readFields(fd: FormData) {
   const barcodeRaw = text(fd, "barcode");
   return {
@@ -55,6 +74,8 @@ export async function createProduct(actor: Actor, fd: FormData): Promise<{ error
   if ("error" in photo) return photo;
   const category = categoryFor(fd);
   if ("error" in category) return category;
+  const ws = readWholesale(fd.get("pack_name"), fd.get("pack_size"), fd.get("wholesale_price"));
+  if ("error" in ws) return ws;
 
   // One batch: the price_history row, the SELECT and the photo find the new
   // product through last_insert_rowid() (the SELECT doesn't change it).
@@ -63,10 +84,12 @@ export async function createProduct(actor: Actor, fd: FormData): Promise<{ error
     const results = await runBatch([
       ...category.pre,
       {
-        sql: `INSERT INTO products (sku, barcode, name, category_id, srp, cost, stock_qty, reorder_level, photo_version)
-              VALUES (?, ?, ?, ${category.id.sql}, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO products (sku, barcode, name, category_id, srp, cost, stock_qty, reorder_level, photo_version,
+                                    pack_name, pack_size, wholesale_price)
+              VALUES (?, ?, ?, ${category.id.sql}, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [f.sku, f.barcode, f.name, ...category.id.args, f.srp, f.cost,
-               Number(fd.get("stock_qty")) || 0, f.reorderLevel, photo.kind === "set" ? photo.version : null],
+               Number(fd.get("stock_qty")) || 0, f.reorderLevel, photo.kind === "set" ? photo.version : null,
+               ws.packName, ws.packSize, ws.wholesalePrice],
       },
       stmt`INSERT INTO price_history (product_id, old_srp, new_srp, actor_name)
            VALUES (last_insert_rowid(), ${null}, ${f.srp}, ${actor.name})`,
@@ -78,7 +101,9 @@ export async function createProduct(actor: Actor, fd: FormData): Promise<{ error
         actorName: actor.name,
         actorRole: actor.role,
         action: "product.create",
-        summary: `Added product ${f.name} (SRP ₱${f.srp.toFixed(2)})${photo.kind === "set" ? " with photo" : ""}`,
+        summary: `Added product ${f.name} (SRP ₱${f.srp.toFixed(2)}${
+          ws.packName ? `; wholesale ₱${ws.wholesalePrice!.toFixed(2)} per ${ws.packName} of ${ws.packSize}` : ""
+        })${photo.kind === "set" ? " with photo" : ""}`,
         details: { sku: f.sku, barcode: f.barcode },
       }),
     ]);
@@ -98,6 +123,8 @@ export async function updateProduct(actor: Actor, fd: FormData): Promise<{ error
   if ("error" in photo) return photo;
   const category = categoryFor(fd);
   if ("error" in category) return category;
+  const ws = readWholesale(fd.get("pack_name"), fd.get("pack_size"), fd.get("wholesale_price"));
+  if ("error" in ws) return ws;
 
   const [[before]] = await readBatch<[Product[]]>([stmt`SELECT * FROM products WHERE id = ${id}`]);
   if (!before) return { error: "Product not found." };
@@ -110,11 +137,27 @@ export async function updateProduct(actor: Actor, fd: FormData): Promise<{ error
     {
       sql: `UPDATE products SET sku = ?, barcode = ?, name = ?, category_id = ${category.id.sql},
               srp = ?, cost = ?, reorder_level = ?, is_active = ?,
+              pack_name = ?, pack_size = ?, wholesale_price = ?,
               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
             WHERE id = ?`,
-      args: [f.sku, barcode, name, ...category.id.args, srp, cost, f.reorderLevel, fd.get("is_active") ? 1 : 0, id],
+      args: [f.sku, barcode, name, ...category.id.args, srp, cost, f.reorderLevel, fd.get("is_active") ? 1 : 0,
+             ws.packName, ws.packSize, ws.wholesalePrice, id],
     },
   ];
+  const wsText = (p: { pack_name: string | null; pack_size: number | null; wholesale_price: number | null }) =>
+    p.pack_name ? `₱${(p.wholesale_price ?? 0).toFixed(2)} per ${p.pack_name} of ${p.pack_size}` : "none";
+  const wsBefore = wsText(before);
+  const wsAfter = wsText({ pack_name: ws.packName, pack_size: ws.packSize, wholesale_price: ws.wholesalePrice });
+  if (wsBefore !== wsAfter) {
+    batch.push(
+      auditStmt({
+        ...who,
+        action: "price.wholesale_change",
+        summary: `Wholesale price of ${name} changed: ${wsBefore} → ${wsAfter}`,
+        details: { productId: id, before: wsBefore, after: wsAfter },
+      })
+    );
+  }
   if (Math.abs(before.srp - srp) > 0.004) {
     batch.push(
       stmt`INSERT INTO price_history (product_id, old_srp, new_srp, actor_name)
