@@ -52,6 +52,12 @@ after the Gemellus Cashflow repo.
   tax"). End of Day lists each sale of ₱500 or more (one booklet invoice each) and
   the total of the smaller sales for one summary invoice when it goes over ₱500.
   The threshold rule lives in `src/lib/invoiceRules.ts`.
+- **Report Guide** (`/reports/guide`) — a guide for filling in the store's paper
+  records by hand, from the system's data: each booklet invoice to write (items,
+  totals, cash or charge; the invoice number left blank for the booklet), and the
+  cash receipts journal, cash disbursements journal, general journal and general
+  ledger postings for any dates. Marked "guide only" everywhere: it is never the
+  booklet or the books themselves (`src/lib/bookGuide.ts`).
 - **Expenses** (`/expenses`) — money paid out for the store: flour and other
   ingredients, supplies, utilities, rent, wages. Owner and staff record them
   (what for, amount, date, category, how paid, supplier); only the owner edits

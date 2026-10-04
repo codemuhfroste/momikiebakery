@@ -110,7 +110,11 @@ export default async function EndOfDayPage({ searchParams }: PageProps<"/reports
         </div>
         <p className="border-t border-line px-5 py-3 text-xs text-muted">
           Voided sales are left out. Credit (utang) sales are included on the day they were made. These rules are the store&apos;s
-          understanding and are still to be confirmed with the bookkeeper.
+          understanding and are still to be confirmed with the bookkeeper. The{" "}
+          <Link href={`/reports/guide?tab=booklet&from=${date}&to=${date}`} className="text-brand hover:underline print:hidden">
+            Report Guide
+          </Link>{" "}
+          shows each invoice with its items, and what goes in each book.
         </p>
       </Card>
 

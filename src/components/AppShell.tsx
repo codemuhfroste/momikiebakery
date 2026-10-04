@@ -28,6 +28,7 @@ const OWNER_NAV: NavGroup[] = [
       { href: "/expenses", label: "Expenses", icon: "expenses" },
       { href: "/reports", label: "End of Day", icon: "eod" },
       { href: "/reports/sales", label: "Sales Report", icon: "report" },
+      { href: "/reports/guide", label: "Report Guide", icon: "guide" },
     ],
   },
   {
