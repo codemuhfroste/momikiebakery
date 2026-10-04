@@ -56,6 +56,7 @@ class Icons2 {
   static const products = 'M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8';
   static const inventory = 'M3 7h18M5 7v13h14V7M9 11h6';
   static const eod = 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h4';
+  static const expenses = 'M3 7h18v12H3zM3 11h18M16 15h2M7 3l3 4M17 3l-3 4';
   static const report = 'M4 20V10M10 20V4M16 20v-7M22 20H2';
   static const staff = 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6 8-6s8 2 8 6';
   static const printer = 'M7 8V4h10v4M7 17H5a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v6H7z';

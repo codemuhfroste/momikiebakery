@@ -44,6 +44,7 @@ const navGroups = [
     NavItem('inventory', 'Inventory', Icons2.inventory, path: '/inventory'),
   ]),
   NavGroup('Reports', [
+    NavItem('expenses', 'Expenses', Icons2.expenses, path: '/expenses'),
     NavItem('eod', 'End of Day', Icons2.eod, path: '/reports'),
     NavItem('report', 'Sales Report', Icons2.report, path: '/reports/sales'),
   ]),

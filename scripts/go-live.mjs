@@ -39,7 +39,7 @@ function weakPin(pin) {
 console.log(`\nGo-live check for ${url.replace(/\?.*/, "")}\n`);
 
 const tables = [
-  "credit_allocations", "credit_ledger", "stock_movements", "sale_items", "sales", "price_history",
+  "expenses", "credit_allocations", "credit_ledger", "stock_movements", "sale_items", "sales", "price_history",
   "product_photos", "products", "categories", "customers", "audit_log", "login_attempts",
 ];
 const counts = {};

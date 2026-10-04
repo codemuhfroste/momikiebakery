@@ -30,6 +30,8 @@ export interface DaySummary {
   creditPayments: MethodLine[]; // payments received toward balances, by method
   voids: { count: number; total: number };
   cashExpected: number; // what should be in the drawer from today's activity
+  expensesFromDrawer: number; // cash taken out of the drawer to pay expenses
+  expensesTotal: number; // every expense dated today, however paid
   firstSaleAt: string | null;
   lastSaleAt: string | null;
 }
@@ -67,6 +69,11 @@ export async function getDaySummary(date: string): Promise<DaySummary> {
          WHERE s.voided_at IS NULL AND s.created_at >= ${start} AND s.created_at < ${end}`,
   ]);
 
+  const [[spent]] = await readBatch<[{ total: number; drawer: number }[]]>([
+    stmt`SELECT COALESCE(SUM(amount), 0) AS total, COALESCE(SUM(CASE WHEN from_drawer = 1 THEN amount ELSE 0 END), 0) AS drawer
+         FROM expenses WHERE spent_on = ${date}`,
+  ]);
+
   const cashSales = byMethod.find((m) => m.method === "Cash")?.total ?? 0;
   const cashPayments = payments.find((m) => m.method === "Cash")?.total ?? 0;
   return {
@@ -83,8 +90,11 @@ export async function getDaySummary(date: string): Promise<DaySummary> {
     creditPayments: payments,
     voids: { count: voids.n, total: round2(voids.total) },
     // Cash sales are recorded at their total (change already handed back),
-    // plus cash taken as credit down payments and cash credit payments.
-    cashExpected: round2(cashSales + credit.down + cashPayments),
+    // plus cash taken as credit down payments and cash credit payments,
+    // less cash taken out of the drawer to pay expenses.
+    cashExpected: round2(cashSales + credit.down + cashPayments - spent.drawer),
+    expensesFromDrawer: round2(spent.drawer),
+    expensesTotal: round2(spent.total),
     firstSaleAt: totals.first,
     lastSaleAt: totals.last,
   };
@@ -99,6 +109,7 @@ export interface SalesReport {
   byPriceType: { type: "retail" | "wholesale"; count: number; revenue: number; cost: number }[];
   byCategory: { category: string; qty: number; revenue: number; cost: number }[];
   topProducts: { name: string; qty: number; revenue: number; cost: number }[];
+  expenses: { total: number; count: number; byCategory: { category: string; count: number; total: number }[] };
 }
 
 export async function getSalesReport(from: string, to: string): Promise<SalesReport> {
@@ -157,9 +168,22 @@ export async function getSalesReport(from: string, to: string): Promise<SalesRep
          GROUP BY type ORDER BY type DESC`,
   ]);
 
+  const [[spent], spentByCategory] = await readBatch<
+    [{ total: number; count: number }[], { category: string; count: number; total: number }[]]
+  >([
+    stmt`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expenses WHERE spent_on >= ${from} AND spent_on <= ${to}`,
+    stmt`SELECT category, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+         FROM expenses WHERE spent_on >= ${from} AND spent_on <= ${to} GROUP BY category ORDER BY total DESC`,
+  ]);
+
   return {
     from,
     to,
+    expenses: {
+      total: round2(spent.total),
+      count: spent.count,
+      byCategory: spentByCategory.map((c) => ({ ...c, total: round2(c.total) })),
+    },
     totals: {
       count: totals.count,
       revenue: round2(totals.revenue),

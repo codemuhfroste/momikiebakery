@@ -47,6 +47,12 @@ after the Gemellus Cashflow repo.
   kg; the cart line then holds the kg, to the gram. Receipts show
   "0.35 kg × ₱80.00/kg". Things sold by count (calamansi, eggs) stay by the
   piece. Set it on the product form or the Excel sheet's "Sold by" column.
+- **Expenses** (`/expenses`) — money paid out for the store: flour and other
+  ingredients, supplies, utilities, rent, wages. Owner and staff record them
+  (what for, amount, date, category, how paid, supplier); only the owner edits
+  or deletes, and every change is in the Audit Log. Totals by category for any
+  dates. Cash marked "from the register drawer" comes off End of Day's expected
+  cash; the Sales Report and its Excel file show net profit after expenses.
 - **Import from Excel** (`/products/import`) — download the product sheet (every
   product plus blank rows, with category and Yes/No dropdowns), edit it in Excel or
   Google Sheets, upload it, check the preview (new / updated / skipped rows), then

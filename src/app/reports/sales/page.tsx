@@ -23,6 +23,7 @@ export default async function SalesReportPage({ searchParams }: PageProps<"/repo
   const r = await getSalesReport(from, to);
   const days = fillDays(from, to, r.byDay);
   const profit = r.totals.revenue - r.totals.cost;
+  const netProfit = profit - r.expenses.total;
   const monthStart = `${today.slice(0, 8)}01`;
   const presets = [
     { label: "Today", from: today, to: today },
@@ -83,7 +84,12 @@ export default async function SalesReportPage({ searchParams }: PageProps<"/repo
       <div className="stagger mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Total sales" value={formatCurrency(r.totals.revenue)} hint={`${r.totals.count} sales · ${r.totals.voids} voided`} />
         <Stat label="Gross profit" value={formatCurrency(profit)} hint={r.totals.revenue > 0 ? `${((profit / r.totals.revenue) * 100).toFixed(0)}% of sales` : undefined} />
-        <Stat label="Average sale" value={formatCurrency(r.totals.count ? r.totals.revenue / r.totals.count : 0)} />
+        <Stat
+          label="Net profit (after expenses)"
+          value={formatCurrency(netProfit)}
+          hint={`Gross profit − ${formatCurrency(r.expenses.total)} expenses`}
+          tone={netProfit < 0 ? "bad" : undefined}
+        />
         <Stat label="Put on credit" value={formatCurrency(r.totals.credit)} hint={`Discounts given: ${formatCurrency(r.totals.discounts)}`} />
       </div>
 
@@ -95,6 +101,48 @@ export default async function SalesReportPage({ searchParams }: PageProps<"/repo
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Profit after expenses"
+            description={`Average sale: ${formatCurrency(r.totals.count ? r.totals.revenue / r.totals.count : 0)}`}
+            actions={
+              <Link href={`/expenses?${q}`} className="text-sm text-brand hover:underline">
+                See expenses
+              </Link>
+            }
+          />
+          <dl className="space-y-1.5 p-5 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-muted">Total sales</dt>
+              <dd className="tabular-nums">{formatCurrency(r.totals.revenue)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted">− Cost of items sold</dt>
+              <dd className="tabular-nums">{formatCurrency(r.totals.cost)}</dd>
+            </div>
+            <div className="flex justify-between border-t border-line pt-1.5 font-medium">
+              <dt>Gross profit</dt>
+              <dd className="tabular-nums">{formatCurrency(profit)}</dd>
+            </div>
+            {r.expenses.byCategory.map((c) => (
+              <div key={c.category} className="flex justify-between">
+                <dt className="text-muted">− {c.category}</dt>
+                <dd className="tabular-nums">{formatCurrency(c.total)}</dd>
+              </div>
+            ))}
+            {r.expenses.count === 0 && (
+              <div className="flex justify-between">
+                <dt className="text-muted">− Expenses</dt>
+                <dd className="tabular-nums">{formatCurrency(0)}</dd>
+              </div>
+            )}
+            <div className={`flex justify-between border-t border-line pt-2 font-semibold ${netProfit < 0 ? "text-red-600" : ""}`}>
+              <dt>Net profit</dt>
+              <dd className="tabular-nums">{formatCurrency(netProfit)}</dd>
+            </div>
+          </dl>
+        </Card>
+
         <Card>
           <CardHeader title="By category" />
           <Table>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canManage, getSession } from "@/lib/rbac";
 import { getSalesExportRows, getSalesReport } from "@/lib/reports";
+import { listExpenses } from "@/lib/expenses";
 import { formatDate, manilaToday } from "@/lib/format";
 import { packPlural } from "@/lib/types";
 import { addBanner, addSubtext, addTable, manilaExcelDate, newWorkbook, stamp, workbookResponse, type Cell } from "@/lib/excel";
@@ -20,10 +21,11 @@ export async function GET(request: NextRequest) {
   let from = ISO.test(p.get("from") ?? "") ? p.get("from")! : to;
   if (from > to) [from, to] = [to, from];
 
-  const [report, sales, items] = await Promise.all([
+  const [report, sales, items, expenses] = await Promise.all([
     getSalesReport(from, to),
     getSalesExportRows(from, to, "sales"),
     getSalesExportRows(from, to, "items"),
+    listExpenses(from, to),
   ]);
   const period = from === to ? formatDate(from) : `${formatDate(from)} to ${formatDate(to)}`;
   const wb = newWorkbook();
@@ -41,6 +43,8 @@ export async function GET(request: NextRequest) {
       ["Total sales", t.revenue],
       ["Cost of items sold", t.cost],
       ["Gross profit", t.revenue - t.cost],
+      ["Expenses", report.expenses.total],
+      ["Net profit (after expenses)", t.revenue - t.cost - report.expenses.total],
       ["Put on credit (utang)", t.credit],
       ["Discounts given", t.discounts],
     ],
@@ -88,6 +92,14 @@ export async function GET(request: NextRequest) {
     [{ header: "Product" }, { header: "Sold", kind: "qty" }, { header: "Amount", kind: "peso" }, { header: "Profit", kind: "peso" }],
     report.topProducts.map((x) => [x.name, x.qty, x.revenue, x.revenue - x.cost]),
     { freeze: false, filter: false }
+  );
+  sum.addRow([]);
+  addBanner(sum, "Expenses by category", 4, 11);
+  addTable(
+    sum,
+    [{ header: "Category" }, { header: "Count", kind: "int" }, { header: "Amount", kind: "peso" }],
+    report.expenses.byCategory.map((c) => [c.category, c.count, c.total]),
+    { totals: ["Count", "Amount"], freeze: false, filter: false }
   );
   sum.getColumn(1).width = Math.max(sum.getColumn(1).width ?? 0, 28);
 
@@ -147,6 +159,25 @@ export async function GET(request: NextRequest) {
       ];
     }),
     { totals: ["Qty (pieces or kg)", "Line total", "Cost", "Profit"] }
+  );
+
+  // ---- Expenses ----
+  const es = wb.addWorksheet("Expenses");
+  const expenseCols = [
+    { header: "Date", width: 14 }, { header: "What for", width: 36 }, { header: "Category", width: 18 },
+    { header: "Bought from", width: 20 }, { header: "Paid by" }, { header: "From the drawer" }, { header: "Recorded by" },
+    { header: "Notes", width: 30 }, { header: "Amount", kind: "peso" as const },
+  ];
+  addBanner(es, `Expenses — ${period}`, expenseCols.length);
+  addSubtext(es, "Money paid out for the store. The Summary sheet takes the total off the profit.", expenseCols.length);
+  addTable(
+    es,
+    expenseCols,
+    [...expenses].reverse().map((e): Cell[] => [
+      formatDate(e.spent_on), e.description, e.category, e.supplier ?? "", e.payment_method, e.from_drawer ? "Yes" : "",
+      e.recorded_by, e.notes ?? "", e.amount,
+    ]),
+    { totals: ["Amount"] }
   );
 
   const name = `momikie-sales-${from}${from === to ? "" : `-to-${to}`}.xlsx`;

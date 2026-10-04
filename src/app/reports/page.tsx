@@ -40,7 +40,11 @@ export default async function EndOfDayPage({ searchParams }: PageProps<"/reports
       />
 
       <div className="stagger mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Cash that should be in the drawer" value={formatCurrency(s.cashExpected)} hint="Cash sales + cash down payments + cash credit payments" />
+        <Stat
+          label="Cash that should be in the drawer"
+          value={formatCurrency(s.cashExpected)}
+          hint={`Cash sales + cash down payments + cash credit payments${s.expensesFromDrawer > 0 ? " − expenses paid from the drawer" : ""}`}
+        />
         <Stat label="Total sales" value={formatCurrency(s.grossSales)} hint={`${s.salesCount} sales · ${formatQty(s.itemsSold)} items`} />
         <Stat label="Gross profit" value={formatCurrency(profit)} hint="Sales minus the cost of items sold" />
         <Stat label="Put on credit (utang)" value={formatCurrency(s.creditCharged)} hint="Added to customer balances" />
@@ -54,6 +58,7 @@ export default async function EndOfDayPage({ searchParams }: PageProps<"/reports
               <Row label="Cash sales" value={cashSales} />
               <Row label="Cash down payments on credit sales" value={s.creditDownPayments} />
               <Row label="Credit payments received in cash" value={cashPayments} />
+              {s.expensesFromDrawer > 0 && <Row label="Expenses paid from the drawer" value={-s.expensesFromDrawer} />}
               <div className="flex justify-between border-t border-line pt-2 font-semibold">
                 <dt>Expected from today</dt>
                 <dd className="tabular-nums">{formatCurrency(s.cashExpected)}</dd>
@@ -133,6 +138,15 @@ export default async function EndOfDayPage({ searchParams }: PageProps<"/reports
           <dl className="space-y-1.5 p-5 text-sm">
             <Row label="Discounts given" value={s.discounts} />
             <Row label="Cost of items sold" value={s.costOfGoods} />
+            <div className="flex justify-between">
+              <dt className="text-muted">
+                Expenses recorded for this day{" "}
+                <Link href={`/expenses?from=${date}&to=${date}`} className="text-brand hover:underline print:hidden">
+                  (see)
+                </Link>
+              </dt>
+              <dd className="tabular-nums">{formatCurrency(s.expensesTotal)}</dd>
+            </div>
             <div className="flex justify-between">
               <dt className="text-muted">Items sold at other than SRP</dt>
               <dd className="tabular-nums">{s.priceOverrides}</dd>

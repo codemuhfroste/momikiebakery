@@ -18,6 +18,7 @@ const TABLES: { table: string; title: string; note: string }[] = [
   { table: "credit_allocations", title: "Credit allocations", note: "Which receipts each credit payment paid off." },
   { table: "stock_movements", title: "Stock movements", note: "Every change to stock: sales, deliveries, spoilage, corrections." },
   { table: "price_history", title: "SRP history", note: "Every SRP set or changed." },
+  { table: "expenses", title: "Expenses", note: "Money paid out for the store. from_drawer = 1: cash taken from the register drawer." },
   { table: "staff", title: "Staff", note: "Staff logins. PINs are not included." },
   { table: "audit_log", title: "Audit log", note: "Who did what and when." },
 ];

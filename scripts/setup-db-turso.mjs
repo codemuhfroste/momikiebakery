@@ -169,6 +169,24 @@ const statements = [
     created_at TEXT NOT NULL DEFAULT ${NOW}
   )`,
   `CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at DESC)`,
+  // Money paid out for the store (flour, supplies, bills…); see
+  // src/lib/expenses.ts. spent_on is the Philippine date it was paid;
+  // from_drawer = 1 when the cash came out of the register drawer.
+  `CREATE TABLE IF NOT EXISTS expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    spent_on TEXT NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    amount REAL NOT NULL CHECK (amount > 0),
+    payment_method TEXT NOT NULL DEFAULT 'Cash',
+    from_drawer INTEGER NOT NULL DEFAULT 0,
+    supplier TEXT,
+    notes TEXT,
+    recorded_by TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT ${NOW},
+    updated_at TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_expenses_spent_on ON expenses(spent_on)`,
   // Backs the login lockout in loginThrottle.ts — one row per identifier
   // (e.g. "login:203.0.113.1"), reset on a successful login.
   `CREATE TABLE IF NOT EXISTS login_attempts (

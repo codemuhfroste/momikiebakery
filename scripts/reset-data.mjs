@@ -20,6 +20,7 @@ const db = createClient({ url, authToken });
 
 // Children before parents, so foreign keys never point at a deleted row.
 const tables = [
+  "expenses",
   "credit_allocations",
   "credit_ledger",
   "stock_movements",
