@@ -4,6 +4,11 @@
          Wi-Fi or data comes back and sync straight away. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- The Bluetooth receipt printer: "Nearby devices" (connect only — the
+         printer is paired in Android's settings, so no scanning or location). -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <application
         android:label="${appName}"
         android:name="${applicationName}"

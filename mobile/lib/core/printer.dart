@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'format.dart';
@@ -168,45 +168,55 @@ class ReceiptPrinter extends ChangeNotifier {
   }
 }
 
-/// The Bluetooth connection, kept open between receipts so each one prints
-/// at once; reconnects by itself when the printer was switched off or out
-/// of range.
+/// The Bluetooth connection (BluetoothPrinter.kt), kept open between
+/// receipts so each one prints at once; reconnects by itself when the
+/// printer was switched off or out of range.
 class BluetoothLink {
+  static const _channel = MethodChannel('momikie/printer');
+
+  Future<T?> _call<T>(String method, [Object? args]) async {
+    try {
+      return await _channel.invokeMethod<T>(method, args);
+    } on MissingPluginException {
+      throw PrinterException('Bluetooth printing works only in the tablet app.');
+    } on PlatformException catch (e) {
+      throw PrinterException('Bluetooth problem: ${e.message ?? e.code}');
+    }
+  }
+
   Future<void> _ensurePermission({bool quiet = false}) async {
     // Background checks never pop up the permission prompt; it's asked for
     // when the printer is chosen.
-    if (quiet && !await _granted()) throw PrinterException("Bluetooth is off, or \"Nearby devices\" isn't allowed for this app (allow it on the Printer page).");
-    if (!await PrintBluetoothThermal.isPermissionBluetoothGranted) {
-      throw PrinterException('Allow "Nearby devices" for this app so it can use the Bluetooth printer, then try again.');
+    var granted = await _call<bool>('granted') ?? false;
+    if (!granted && !quiet) granted = await _call<bool>('requestPermission') ?? false;
+    if (!granted) {
+      throw PrinterException(
+        quiet
+            ? "\"Nearby devices\" isn't allowed for this app yet (allow it on the Printer page)."
+            : 'Allow "Nearby devices" for this app so it can use the Bluetooth printer, then try again.',
+      );
     }
-    if (!await PrintBluetoothThermal.bluetoothEnabled) {
+    if (!(await _call<bool>('enabled') ?? false)) {
       throw PrinterException("Bluetooth is off. Turn it on in the tablet's quick settings, then try again.");
     }
   }
 
   Future<List<(String, String)>> paired() async {
     await _ensurePermission();
-    final list = await PrintBluetoothThermal.pairedBluetooths;
-    return [for (final d in list) (d.name, d.macAdress)];
+    final list = await _call<List<Object?>>('paired') ?? const [];
+    return [
+      for (final d in list.cast<Map<Object?, Object?>>()) ('${d['name']}', '${d['address']}'),
+    ];
   }
 
   Future<void> disconnect() async {
     try {
-      await PrintBluetoothThermal.disconnect;
+      await _call<void>('disconnect');
     } catch (_) {}
   }
 
   // One print at a time (auto-print and a reprint tapped together).
   Future<void> _queue = Future.value();
-
-  // True when "Nearby devices" is already allowed — asked without prompting.
-  Future<bool> _granted() async {
-    try {
-      return await PrintBluetoothThermal.bluetoothEnabled; // fails (no prompt) without the permission
-    } catch (_) {
-      return false;
-    }
-  }
 
   Future<void> write(String address, String name, List<int> bytes, {bool quiet = false}) {
     final job = _queue.then((_) => _write(address, name, bytes, quiet: quiet));
@@ -216,26 +226,19 @@ class BluetoothLink {
 
   Future<void> _write(String address, String name, List<int> bytes, {bool quiet = false}) async {
     await _ensurePermission(quiet: quiet);
-    for (var attempt = 1; attempt <= 2; attempt++) {
-      if (!await PrintBluetoothThermal.connectionStatus || attempt == 2) {
-        await disconnect();
-        if (!await PrintBluetoothThermal.connect(macPrinterAddress: address)) {
-          if (attempt == 2) {
-            throw PrinterException("Couldn't connect to the printer \"$name\". Check that it's switched on and nearby.");
-          }
-          continue;
-        }
-      }
-      // Small pieces with a short pause: cheap printers drop data that
-      // arrives faster than they can print.
-      var ok = true;
-      for (var i = 0; i < bytes.length && ok; i += 512) {
-        ok = await PrintBluetoothThermal.writeBytes(bytes.sublist(i, i + 512 > bytes.length ? bytes.length : i + 512));
-        if (ok) await Future<void>.delayed(const Duration(milliseconds: 25));
-      }
-      if (ok) return;
+    final problem = await _call<String>('write', {'address': address, 'bytes': Uint8List.fromList(bytes)});
+    switch (problem) {
+      case null:
+        return;
+      case 'off':
+        throw PrinterException("Bluetooth is off. Turn it on in the tablet's quick settings, then try again.");
+      case 'connect':
+        throw PrinterException("Couldn't connect to the printer \"$name\". Check that it's switched on and near the tablet.");
+      case 'write':
+        throw PrinterException("The printer \"$name\" stopped part-way. Check the paper, switch it off and on, then try again.");
+      default:
+        throw PrinterException('The printer "$name" had a problem ($problem). Switch it off and on, then try again.');
     }
-    throw PrinterException("The printer \"$name\" stopped answering. Switch it off and on, then try again.");
   }
 }
 
