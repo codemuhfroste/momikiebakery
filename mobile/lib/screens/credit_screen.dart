@@ -6,6 +6,7 @@ import '../core/models.dart';
 import '../core/nav.dart';
 import '../core/theme.dart';
 import '../widgets/common.dart';
+import '../widgets/customer_form.dart';
 import '../widgets/shell.dart';
 import '../widgets/web.dart';
 
@@ -55,10 +56,11 @@ class _CreditScreenState extends State<CreditScreen> {
     return PageBody(
       onRefresh: app.syncNow,
       children: [
-        const PageHeader(
+        PageHeader(
           title: 'Credit Accounts',
           subtitle:
               'Customers who may buy now and pay later (utang). Each account shows what is owed, every purchase on credit, and every payment received.',
+          actions: [WebButton('+ Add customer', onPressed: _add)],
         ),
         StatGrid(
           children: [
@@ -70,9 +72,7 @@ class _CreditScreenState extends State<CreditScreen> {
         ),
         WebCard(
           child: customers.isEmpty
-              ? const EmptyState(
-                  'No credit customers yet. Add a customer on the website, then choose Credit as the payment at the register.',
-                )
+              ? const EmptyState('No credit customers yet. Tap "+ Add customer", then choose Credit as the payment at the register.')
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -148,6 +148,11 @@ class _CreditScreenState extends State<CreditScreen> {
       Text(c.lastActivity == null ? '—' : longDateTime(c.lastActivity!), style: const TextStyle(color: Brand.muted)),
       WebBadge(statusLabel, tone: statusTone),
     ];
+  }
+
+  Future<void> _add() async {
+    final c = await showAddCustomer(context);
+    if (c != null && mounted) showMessage(context, '${c.name} added. Choose Credit at the register to sell to them on credit.');
   }
 
   Future<void> _pay(Customer c) async {

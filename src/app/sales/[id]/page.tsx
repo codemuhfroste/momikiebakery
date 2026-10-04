@@ -59,7 +59,6 @@ export default async function SaleDetailPage({ params, searchParams }: PageProps
           <div className="text-base font-semibold uppercase tracking-wide">Momikie&apos;s General Merchandise</div>
           <div className="mt-1 text-xs text-muted">Receipt No. {sale.receipt_no}</div>
           <div className="text-xs text-muted">{formatDateTime(sale.created_at)}</div>
-          <div className="text-xs text-muted">Cashier: {sale.cashier_name}</div>
           {sale.customer_name && <div className="text-xs text-muted">Customer: {sale.customer_name}</div>}
           {sale.price_type === "wholesale" && (
             <div className="mt-1 text-xs font-semibold uppercase tracking-wide">Wholesale</div>

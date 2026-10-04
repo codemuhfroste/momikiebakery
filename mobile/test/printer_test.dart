@@ -47,7 +47,7 @@ void main() {
     expect(text, contains('WHOLESALE'));
     expect(text, contains('Receipt No. MOM-20261004-0012'));
     expect(text, contains('Oct 4, 2026  2:30 PM')); // Philippine time
-    expect(text, contains('Cashier: Ana'));
+    expect(text, isNot(contains('Cashier')));
     expect(text, contains('2 boxes of 24 x 240.00'));
     expect(text, contains('480.00'));
     expect(text, contains('5 x 3.00'));

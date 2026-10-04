@@ -11,6 +11,7 @@ import '../core/nav.dart';
 import '../core/devices.dart';
 import '../core/printer.dart';
 import '../widgets/common.dart';
+import '../widgets/customer_form.dart';
 import '../widgets/shell.dart';
 import '../widgets/web.dart';
 
@@ -1178,7 +1179,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ],
             )
           else
-            _CustomerPicker(customers: app.customers, onSelect: (id) => setState(() => _customerId = id)),
+            _CustomerPicker(
+              customers: app.customers,
+              onSelect: (id) => setState(() => _customerId = id),
+              onAdd: (typed) async {
+                final c = await showAddCustomer(context, name: typed);
+                if (c != null && mounted) setState(() => _customerId = c.id);
+              },
+            ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1246,15 +1254,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
 }
 
 class _CustomerPicker extends StatefulWidget {
-  const _CustomerPicker({required this.customers, required this.onSelect});
+  const _CustomerPicker({required this.customers, required this.onSelect, required this.onAdd});
   final List<Customer> customers;
   final ValueChanged<int> onSelect;
+  final ValueChanged<String> onAdd; // "+ New customer", with what was typed as the name
   @override
   State<_CustomerPicker> createState() => _CustomerPickerState();
 }
 
 class _CustomerPickerState extends State<_CustomerPicker> {
   String _q = '';
+  String _typed = '';
   @override
   Widget build(BuildContext context) {
     final matches = widget.customers
@@ -1268,7 +1278,10 @@ class _CustomerPickerState extends State<_CustomerPicker> {
         TextField(
           style: tSm,
           decoration: const InputDecoration(hintText: 'Search customer name or mobile'),
-          onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
+          onChanged: (v) => setState(() {
+            _typed = v.trim();
+            _q = _typed.toLowerCase();
+          }),
         ),
         const SizedBox(height: 6),
         Container(
@@ -1303,6 +1316,14 @@ class _CustomerPickerState extends State<_CustomerPicker> {
                     ),
                   ),
                 ),
+        ),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: WebLink(
+            _typed.isEmpty || matches.isNotEmpty ? '+ New customer' : '+ Add "$_typed" as a new customer',
+            onTap: () => widget.onAdd(_typed),
+          ),
         ),
       ],
     );

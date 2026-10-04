@@ -368,6 +368,35 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     if (recentReceipts.length > 50) recentReceipts = recentReceipts.sublist(0, 50);
   }
 
+  /// Adds a credit customer on the server (needs the internet) and reloads
+  /// the customer list. Returns the new customer, or why it failed.
+  Future<(Customer?, String?)> addCustomer({
+    required String name,
+    String phone = '',
+    String address = '',
+    String notes = '',
+    double? creditLimit,
+  }) async {
+    try {
+      final res = await api.createCustomer({
+        'name': name.trim(),
+        'phone': phone.trim(),
+        'address': address.trim(),
+        'notes': notes.trim(),
+        'creditLimit': creditLimit,
+      });
+      final id = (res['id'] as num).toInt();
+      await _refreshCatalog();
+      notifyListeners();
+      return (customers.where((c) => c.id == id).firstOrNull, null);
+    } on ApiException catch (e) {
+      return (
+        null,
+        e.network ? "You're offline. Adding a customer needs the internet — try again when the tablet is back online." : e.message,
+      );
+    }
+  }
+
   Future<void> _refreshCatalog() async {
     final data = await api.bootstrap();
     products = (data['products'] as List).map((j) => Product.fromJson(j as Json)).toList();

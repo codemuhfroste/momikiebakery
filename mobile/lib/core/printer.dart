@@ -454,7 +454,6 @@ Uint8List buildReceipt(ReceiptData r, {required int width, bool openDrawer = fal
   }
   p.line(r.receiptNo != null ? 'Receipt No. ${r.receiptNo}' : 'Ref. ${r.reference ?? ''}');
   p.line(DateFormat('MMM d, y  h:mm a').format(manila(r.time)));
-  p.wrapped('Cashier: ${r.cashier}');
   if (r.customer != null) p.wrapped('Customer: ${r.customer}');
   p.align(0);
   p.rule();
