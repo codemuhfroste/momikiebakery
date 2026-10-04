@@ -405,7 +405,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         const SizedBox(height: 10),
         if (app.products.isEmpty)
-          const WebCard(child: EmptyState('No products on this tablet yet. Connect to the internet once to download them.'))
+          WebCard(
+            child: EmptyState(
+              app.lastSyncAt == null
+                  ? 'No products on this tablet yet. Connect to the internet once to download them.'
+                  : 'No products yet. Add them under Products — one at a time, or many at once with Import from Excel.',
+            ),
+          )
         else if (results.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 40),
