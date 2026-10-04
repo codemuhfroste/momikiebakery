@@ -9,7 +9,9 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../core/app_state.dart';
+import '../core/devices.dart';
 import '../core/nav.dart';
+import '../core/printer.dart';
 import '../core/theme.dart';
 import '../widgets/common.dart';
 import '../widgets/shell.dart';
@@ -100,7 +102,7 @@ class WebPageState extends State<WebPage> {
           if (m.message.startsWith('nav:') && _native.containsKey(m.message.substring(4))) {
             appNav.go(_native[m.message.substring(4)]!);
           } else if (m.message == 'print' && mounted) {
-            showMessage(context, 'Printing works from the website in a browser (e.g. on a computer connected to the printer).');
+            _print();
           }
         },
       )
@@ -215,6 +217,33 @@ class WebPageState extends State<WebPage> {
       // The website asked to sign in: the app's sign-in has expired.
       AppScope.read(context).syncNow();
       if (mounted) showMessage(context, 'Your sign-in has expired. Sign out and sign in again.', error: true);
+    }
+  }
+
+  /// "Print receipt" on a receipt page prints it on the store's receipt
+  /// printer; other pages (reports, statements) print from a computer.
+  Future<void> _print() async {
+    final path = Uri.tryParse(await _controller?.currentUrl() ?? '')?.path ?? '';
+    final id = int.tryParse(RegExp(r'^/sales/(\d+)$').firstMatch(path)?.group(1) ?? '');
+    if (!mounted) return;
+    if (id == null) {
+      showMessage(context, 'This page prints from the website on a computer. Receipts print on the receipt printer.');
+      return;
+    }
+    if (!receiptPrinter.ready) {
+      showMessage(context, 'Set up the receipt printer first (This tablet → Printer).', error: true);
+      return;
+    }
+    showMessage(context, 'Printing receipt…');
+    try {
+      final data = await AppScope.read(context).api.receipt(id);
+      await receiptPrinter.printReceipt(ReceiptData.fromServer(data));
+      deviceStatus.printed();
+      if (mounted) showMessage(context, 'Receipt printed.');
+    } on PrinterException catch (e) {
+      if (mounted) showMessage(context, e.message, error: true);
+    } catch (_) {
+      if (mounted) showMessage(context, "Couldn't load the receipt. Check the internet connection.", error: true);
     }
   }
 

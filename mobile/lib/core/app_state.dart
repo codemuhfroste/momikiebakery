@@ -206,6 +206,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
             name: l.product.name,
             qty: l.pieces,
             packs: l.byPack ? l.qty : null,
+            packName: l.byPack ? l.product.packName : null,
+            packSize: l.byPack ? l.product.packSize : null,
             unitPrice: round2(l.unitPrice),
             srp: l.listPrice,
             barcode: l.product.barcode,

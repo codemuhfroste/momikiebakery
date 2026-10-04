@@ -2,6 +2,7 @@ import { logoutAction } from "@/app/actions";
 import type { Role } from "@/lib/auth";
 import NavLinks, { type NavGroup } from "./NavLinks";
 import MobileNav from "./MobileNav";
+import DeviceStatus from "./DeviceStatus";
 import SubmitButton from "./SubmitButton";
 
 const OWNER_NAV: NavGroup[] = [
@@ -77,6 +78,7 @@ export default function AppShell({
       <div className="flex-1 overflow-y-auto">
         <NavLinks groups={groups} />
       </div>
+      <DeviceStatus />
       <form action={logoutAction} className="mt-4 border-t border-white/10 px-3 pt-4">
         <div className="text-xs text-white/55">
           Signed in as <span className="font-medium text-white/85">{name}</span>

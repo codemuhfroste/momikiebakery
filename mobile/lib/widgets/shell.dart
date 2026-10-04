@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../core/app_state.dart';
+import '../core/devices.dart';
 import '../core/format.dart';
 import '../core/nav.dart';
 import '../screens/web_page.dart';
@@ -51,7 +52,7 @@ const navGroups = [
     NavItem('staff', 'Staff', Icons2.staff, path: '/staff', ownerOnly: true),
     NavItem('scanner', 'Scanner Check', Icons2.scanner, path: '/scanner'),
   ]),
-  NavGroup('This tablet', [NavItem('sync', 'Sync', Icons2.sync)]),
+  NavGroup('This tablet', [NavItem('sync', 'Sync', Icons2.sync), NavItem('printer', 'Printer', Icons2.printer)]),
 ];
 
 /// "FOR DEMO PURPOSES ONLY" strip, shown while the server is in demo mode.
@@ -230,6 +231,7 @@ class _TopBar extends StatelessWidget {
               style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
+          const DeviceIndicators(compact: true),
           InkWell(
             onTap: app.syncing ? null : app.syncNow,
             borderRadius: BorderRadius.circular(6),
@@ -331,6 +333,8 @@ class _Sidebar extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Scanner and receipt printer — connected or not.
+                const DeviceIndicators(),
                 // Connection status — tap to sync now.
                 InkWell(
                   onTap: app.syncing ? null : app.syncNow,
@@ -483,4 +487,93 @@ class _NavLink extends StatelessWidget {
       ),
     ),
   );
+}
+
+
+/// "Scanner connected" / "Printer not connected" lines in the sidebar (or
+/// just coloured icons in the narrow top bar). Green = ready, amber = not
+/// connected, grey = not set up. Tapping opens the Printer page.
+class DeviceIndicators extends StatelessWidget {
+  const DeviceIndicators({super.key, this.compact = false});
+  final bool compact;
+
+  static const _green = Color(0xFF6EE7B7);
+  static const _amber = Brand.amber400;
+  static const _grey = Color(0x8CFFFFFF);
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: deviceStatus,
+        builder: (context, _) {
+          final d = deviceStatus;
+          final recentScan = d.lastScanAt != null && DateTime.now().difference(d.lastScanAt!) < const Duration(minutes: 30);
+          final (scanColor, scanText) = d.scannerConnected
+              ? (_green, 'Scanner connected')
+              : recentScan
+                  ? (_green, 'Scanner working · ${timeOfDay(d.lastScanAt!)}')
+                  : (_amber, 'Scanner not connected');
+          final (printColor, printText) = switch (d.printer) {
+            PrinterState.connected => (_green, 'Printer connected'),
+            PrinterState.checking => (const Color(0xFF93C5FD), 'Printer: checking…'),
+            PrinterState.notConnected => (_amber, 'Printer not connected'),
+            PrinterState.notSetUp => (_grey, 'Printer not set up'),
+          };
+          final scanTip = d.scannerConnected ? 'Scanner: ${d.scanners.join(', ')}' : 'Plug in or pair the barcode scanner, or scan any barcode to test it';
+          final printTip = d.printerProblem ?? printText;
+          if (compact) {
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Tooltip(message: scanTip, child: _dot(Icons.qr_code_scanner, scanColor)),
+                IconButton(
+                  tooltip: printTip,
+                  onPressed: () => appNav.go('printer'),
+                  icon: _dot(Icons.print_outlined, printColor),
+                ),
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _row(Icons.qr_code_scanner, scanColor, scanText, scanTip, null),
+              _row(Icons.print_outlined, printColor, printText, printTip, () => appNav.go('printer')),
+            ],
+          );
+        },
+      );
+
+  Widget _dot(IconData icon, Color color) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, size: 18, color: Colors.white70),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: Brand.navyDark, width: 1.5)),
+            ),
+          ),
+        ],
+      );
+
+  Widget _row(IconData icon, Color color, String text, String tip, VoidCallback? onTap) => Tooltip(
+        message: tip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 8),
+                Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500))),
+              ],
+            ),
+          ),
+        ),
+      );
 }

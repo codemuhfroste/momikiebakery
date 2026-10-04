@@ -25,6 +25,18 @@ get the top bar and ☰ menu, as on the website.
   unpaid receipts first).
 - **Sync** — online/offline status, what's waiting, anything the server
   couldn't accept, recently synced receipts, sign out.
+- **Printer** — the receipt printer. Bluetooth thermal printers (58/80 mm,
+  ESC/POS over Bluetooth serial): pair it once in Android's Bluetooth settings,
+  then choose it here. Wi-Fi printers (raw port 9100) also work — "Find
+  printers" scans the network. Receipts print after every sale (can be turned
+  off), from "Print receipt" on the Register, and from "Print receipt" on any
+  receipt page; an offline sale prints with the tablet's reference until it
+  syncs. Optional cash-drawer kick on cash sales. No driver, no internet needed
+  (`lib/core/printer.dart`).
+- **Scanner and printer indicators** in the sidebar: the scanner shows
+  connected when Android lists an external keyboard-type device (USB and
+  Bluetooth scanners appear as keyboards — `MainActivity.kt`), the printer
+  when it answers a silent status request (checked every 20 seconds).
 - **Dashboard, Products, Inventory, End of Day, Sales Report, Scanner Check**
   (and for the owner, **Audit Log** and **Staff**) — the website's own pages,
   shown inside the app with the app's sign-in (`lib/screens/web_page.dart`; the

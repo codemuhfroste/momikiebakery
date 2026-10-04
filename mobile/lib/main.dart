@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'core/app_state.dart';
+import 'core/devices.dart';
 import 'core/nav.dart';
+import 'core/printer.dart';
 import 'core/theme.dart';
 import 'screens/credit_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/sales_screen.dart';
+import 'screens/printer_screen.dart';
 import 'screens/sync_screen.dart';
 import 'screens/web_page.dart';
 import 'widgets/shell.dart';
@@ -16,6 +19,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final state = AppState();
   await state.init();
+  await receiptPrinter.load();
   runApp(MomikieApp(state: state));
 }
 
@@ -63,7 +67,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  static const _native = ['register', 'sales', 'credit', 'sync'];
+  static const _native = ['register', 'sales', 'credit', 'sync', 'printer'];
   final _web = GlobalKey<WebPageState>();
   bool _wasWeb = false;
 
@@ -72,10 +76,12 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     appNav.reset();
     appNav.addListener(_onNav);
+    deviceStatus.start(); // scanner and printer indicators
   }
 
   @override
   void dispose() {
+    deviceStatus.stop();
     appNav.removeListener(_onNav);
     super.dispose();
   }
@@ -103,7 +109,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final page = appNav.webPath != null ? 4 : _native.indexOf(appNav.page).clamp(0, 3);
+    final page = appNav.webPath != null ? _native.length : _native.indexOf(appNav.page).clamp(0, _native.length - 1);
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) => didPop ? null : _back(),
@@ -117,6 +123,7 @@ class _HomeShellState extends State<HomeShell> {
             const SalesScreen(),
             const CreditScreen(),
             const SyncScreen(),
+            const PrinterScreen(),
             WebPage(key: _web),
           ],
         ),

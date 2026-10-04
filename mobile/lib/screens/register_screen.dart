@@ -8,6 +8,8 @@ import '../core/format.dart';
 import '../core/models.dart';
 import '../core/theme.dart';
 import '../core/nav.dart';
+import '../core/devices.dart';
+import '../core/printer.dart';
 import '../widgets/common.dart';
 import '../widgets/shell.dart';
 import '../widgets/web.dart';
@@ -54,6 +56,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _busy = false;
   String? _error;
   _LastSale? _lastSale;
+  (String, bool)? _printStatus; // text, is an error
   double _rowTop = 0; // where the two columns start, within the scroll content
 
   // Keyboard-wedge barcode scanners (USB/Bluetooth) type fast and end with
@@ -70,20 +73,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   bool _onHardwareKey(KeyEvent e) {
-    if (e is! KeyDownEvent || !appNav.onRegister || !mounted) return false;
-    final focused = FocusManager.instance.primaryFocus?.context;
-    if (focused != null && focused.findAncestorWidgetOfExactType<EditableText>() != null) return false;
+    if (e is! KeyDownEvent || !mounted) return false;
     final now = DateTime.now();
     if (now.difference(_lastScanKey) > const Duration(milliseconds: 80)) _scanBuffer.clear();
     _lastScanKey = now;
+    final focused = FocusManager.instance.primaryFocus?.context;
+    final inTextBox = focused != null && focused.findAncestorWidgetOfExactType<EditableText>() != null;
     if (e.logicalKey == LogicalKeyboardKey.enter || e.logicalKey == LogicalKeyboardKey.numpadEnter) {
       final code = _scanBuffer.toString().trim();
       _scanBuffer.clear();
-      if (code.length >= 4) {
-        _handleCode(code);
-        return true;
-      }
-      return false;
+      if (code.length < 4) return false;
+      deviceStatus.markScan(); // a fast burst ending in Enter: the scanner works
+      // Text boxes handle their own scans; elsewhere on the Register it adds the product.
+      if (inTextBox || !appNav.onRegister) return false;
+      _handleCode(code);
+      return true;
     }
     final ch = e.character;
     if (ch != null && ch.length == 1 && ch.codeUnitAt(0) >= 32) _scanBuffer.write(ch);
@@ -123,6 +127,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final byPack = _wholesale && p.hasWholesale;
     setState(() {
       _lastSale = null;
+      _printStatus = null;
       _notice = notice == null ? null : (notice, true);
       _flash = (p.id, (_flash?.$2 ?? 0) + 1);
       final line = _cart.where((l) => l.product.id == p.id && l.byPack == byPack).firstOrNull ?? CartLine(p, 0, byPack: byPack);
@@ -251,6 +256,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
     setState(() {
       _lastSale = _LastSale(app.lastRungUp!, _method, _isCredit ? 0 : change, creditAmount, customer?.name);
+      _printStatus = null;
       _busy = false;
       _discount.clear();
       _tendered.clear();
@@ -264,6 +270,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Show the "Sale complete / Give change" box at the top of the panel.
     FocusManager.instance.primaryFocus?.unfocus();
     if (_panelScroll.hasClients) _panelScroll.jumpTo(0);
+    if (receiptPrinter.ready && receiptPrinter.autoPrint) _printLastSale();
+  }
+
+  /// Prints the sale just rung up. Waits a few seconds for it to sync so the
+  /// receipt shows its number; offline it prints with the tablet's reference.
+  Future<void> _printLastSale() async {
+    final app = AppScope.read(context);
+    final sale = app.lastSale;
+    if (sale == null) return;
+    setState(() => _printStatus = ('Printing receipt…', false));
+    for (var i = 0; i < 20 && app.receiptFor(sale.clientUuid) == null && app.online; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+    try {
+      await receiptPrinter.printReceipt(
+        ReceiptData.fromPending(sale, cashier: app.meName ?? '', receiptNo: app.receiptFor(sale.clientUuid)?.receiptNo),
+      );
+      deviceStatus.printed();
+      if (mounted) setState(() => _printStatus = ('Receipt printed', false));
+    } on PrinterException catch (e) {
+      if (mounted) setState(() => _printStatus = (e.message, true));
+    }
   }
 
   // ---------------------------------------------------------------- build
@@ -833,6 +861,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: EdgeInsets.only(top: 8),
             child: Text('Ready for the next customer', style: TextStyle(fontSize: 12, color: Brand.emerald800)),
           ),
+          if (receiptPrinter.ready)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(
+                spacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  InkWell(
+                    onTap: _printStatus?.$1 == 'Printing receipt…' ? null : _printLastSale,
+                    child: const Text(
+                      'Print receipt',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Brand.emerald800,
+                        decoration: TextDecoration.underline,
+                        decorationColor: Brand.emerald800,
+                      ),
+                    ),
+                  ),
+                  if (_printStatus != null)
+                    Text(_printStatus!.$1, style: TextStyle(fontSize: 12, color: _printStatus!.$2 ? Brand.red700 : Brand.emerald800)),
+                ],
+              ),
+            ),
         ],
       ),
     );

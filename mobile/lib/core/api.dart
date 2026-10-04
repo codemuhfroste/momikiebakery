@@ -57,6 +57,10 @@ class Api {
   Future<Json> sales(String date) async =>
       await _send(() => _client.get(_uri('/sales', {'date': date}), headers: _headers)) as Json;
 
+  /// One sale with its lines, for printing.
+  Future<Json> receipt(int saleId) async =>
+      await _send(() => _client.get(_uri('/receipt', {'id': '$saleId'}), headers: _headers)) as Json;
+
   Future<Object?> _send(Future<http.Response> Function() request, {Duration timeout = const Duration(seconds: 20)}) async {
     http.Response res;
     try {

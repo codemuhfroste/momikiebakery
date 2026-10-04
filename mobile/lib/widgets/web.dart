@@ -58,6 +58,7 @@ class Icons2 {
   static const eod = 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h4';
   static const report = 'M4 20V10M10 20V4M16 20v-7M22 20H2';
   static const staff = 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6 8-6s8 2 8 6';
+  static const printer = 'M7 8V4h10v4M7 17H5a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v6H7z';
   static const scanner = 'M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2M7 9v6M10 9v6M14 9v6M17 9v6';
   static const register = 'M4 6h16v12H4zM4 10h16M8 15h3';
   static const sales = 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6';

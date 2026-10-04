@@ -256,6 +256,8 @@ class PendingSaleItem {
   final String name;
   final double qty; // pieces
   final double? packs; // set when sold by the pack; unitPrice and srp are then per pack
+  final String? packName; // for the printed receipt ("2 boxes of 24")
+  final double? packSize;
   final double unitPrice;
   final double srp;
   final String? barcode;
@@ -265,6 +267,8 @@ class PendingSaleItem {
     required this.name,
     required this.qty,
     this.packs,
+    this.packName,
+    this.packSize,
     required this.unitPrice,
     required this.srp,
     this.barcode,
@@ -275,6 +279,8 @@ class PendingSaleItem {
         'name': name,
         'qty': qty,
         if (packs != null) 'packs': packs,
+        if (packName != null) 'packName': packName,
+        if (packSize != null) 'packSize': packSize,
         'unitPrice': unitPrice,
         'srp': srp,
         'barcode': barcode,
@@ -285,6 +291,8 @@ class PendingSaleItem {
         name: '${j['name']}',
         qty: _d(j['qty']),
         packs: _dn(j['packs']),
+        packName: _s(j['packName']),
+        packSize: _dn(j['packSize']),
         unitPrice: _d(j['unitPrice']),
         srp: _d(j['srp']),
         barcode: _s(j['barcode']),
