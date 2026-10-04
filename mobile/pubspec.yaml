@@ -38,6 +38,13 @@ dependencies:
   shared_preferences: ^2.5.5
   connectivity_plus: ^7.3.2
   intl: ^0.20.3
+  flutter_svg: ^2.3.0
+  video_player: ^2.14.1
+  webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.14.1
+  share_plus: ^13.3.1
+  path_provider: ^2.1.6
+  file_picker: ^13.1.0
 
 dev_dependencies:
   flutter_test:
@@ -91,3 +98,20 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  # Same typeface as the website (Geist, SIL Open Font License — assets/fonts/OFL.txt).
+  fonts:
+    - family: Geist
+      fonts:
+        - asset: assets/fonts/Geist-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Geist-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Geist-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Geist-Bold.ttf
+          weight: 700
+
+  # The sign-in screen's background clip, as on the website's login page.
+  assets:
+    - assets/video/login.mp4

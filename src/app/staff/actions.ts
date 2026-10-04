@@ -5,7 +5,7 @@ import { getSession } from "@/lib/rbac";
 import { addStaff, updateStaff } from "@/lib/staff";
 import type { ActionState } from "@/lib/actionState";
 
-// Owner only, even in demo mode: staff accounts decide who can sign in.
+// Owner only: staff accounts decide who can sign in.
 async function ownerOnly() {
   const session = await getSession();
   return session?.role === "owner" ? session : null;

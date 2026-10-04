@@ -81,31 +81,69 @@ class Customer {
   final int id;
   final String name;
   final String? phone;
+  final String? address;
   final double? creditLimit; // null = no limit
   final double balance;
+  final DateTime? lastActivity;
+  final DateTime? oldestUnpaid; // the oldest credit receipt not fully paid
 
-  const Customer({required this.id, required this.name, this.phone, this.creditLimit, required this.balance});
+  const Customer({
+    required this.id,
+    required this.name,
+    this.phone,
+    this.address,
+    this.creditLimit,
+    required this.balance,
+    this.lastActivity,
+    this.oldestUnpaid,
+  });
 
   factory Customer.fromJson(Json j) => Customer(
         id: (j['id'] as num).toInt(),
         name: '${j['name']}',
         phone: _s(j['phone']),
+        address: _s(j['address']),
         creditLimit: _dn(j['credit_limit']),
         balance: _d(j['balance']),
+        lastActivity: DateTime.tryParse('${j['last_activity'] ?? ''}'),
+        oldestUnpaid: DateTime.tryParse('${j['oldest_unpaid'] ?? ''}'),
       );
 
-  Json toJson() => {'id': id, 'name': name, 'phone': phone, 'credit_limit': creditLimit, 'balance': balance};
+  Json toJson() => {
+        'id': id,
+        'name': name,
+        'phone': phone,
+        'address': address,
+        'credit_limit': creditLimit,
+        'balance': balance,
+        'last_activity': lastActivity?.toIso8601String(),
+        'oldest_unpaid': oldestUnpaid?.toIso8601String(),
+      };
 
   double? get available => creditLimit == null ? null : max(0, creditLimit! - balance);
+  bool get overLimit => creditLimit != null && balance > creditLimit! + 0.004;
 
-  Customer withBalance(double b) => Customer(id: id, name: name, phone: phone, creditLimit: creditLimit, balance: b);
+  Customer withBalance(double b, {DateTime? activity}) => Customer(
+        id: id,
+        name: name,
+        phone: phone,
+        address: address,
+        creditLimit: creditLimit,
+        balance: b,
+        lastActivity: activity ?? lastActivity,
+        oldestUnpaid: oldestUnpaid,
+      );
 }
 
+/// A line in the current sale. The price starts at the SRP; changing it is
+/// allowed (as on the website) and the server records it as a price override.
 class CartLine {
   final Product product;
   double qty;
-  CartLine(this.product, this.qty);
-  double get total => product.srp * qty;
+  double unitPrice;
+  CartLine(this.product, this.qty, {double? unitPrice}) : unitPrice = unitPrice ?? product.srp;
+  double get total => round2(unitPrice * qty);
+  bool get priceChanged => (unitPrice - product.srp).abs() > 0.004;
 }
 
 /// A sale saved on the phone and waiting to be sent (or one the server
@@ -286,7 +324,10 @@ class ServerSale {
   final double total;
   final String paymentMethod;
   final String? customerName;
+  final String? cashierName;
   final double creditAmount;
+  final double creditPaid;
+  final int overrideCount;
   final double itemCount;
   final bool voided;
   final String source;
@@ -299,7 +340,10 @@ class ServerSale {
     required this.total,
     required this.paymentMethod,
     this.customerName,
+    this.cashierName,
     required this.creditAmount,
+    this.creditPaid = 0,
+    this.overrideCount = 0,
     required this.itemCount,
     required this.voided,
     required this.source,
@@ -313,7 +357,10 @@ class ServerSale {
         total: _d(j['total']),
         paymentMethod: '${j['paymentMethod']}',
         customerName: _s(j['customerName']),
+        cashierName: _s(j['cashierName']),
         creditAmount: _d(j['creditAmount']),
+        creditPaid: _d(j['creditPaid']),
+        overrideCount: _d(j['overrideCount']).toInt(),
         itemCount: _d(j['itemCount']),
         voided: j['voided'] == true,
         source: '${j['source'] ?? 'web'}',
@@ -327,7 +374,10 @@ class ServerSale {
         'total': total,
         'paymentMethod': paymentMethod,
         'customerName': customerName,
+        'cashierName': cashierName,
         'creditAmount': creditAmount,
+        'creditPaid': creditPaid,
+        'overrideCount': overrideCount,
         'itemCount': itemCount,
         'voided': voided,
         'source': source,

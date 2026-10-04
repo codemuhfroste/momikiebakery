@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-import { STAFF_SEES_OWNER_TABS } from "@/lib/demo";
 import { getBearerSession } from "@/lib/mobileAuth";
 
-// Signed-out visitors go to /login. Cashiers only get the register,
-// transactions, credit accounts, the scan lookup and product photos;
-// everything else is owner-only (pages also check this via rbac.ts).
-const CASHIER_ALLOWED_PREFIXES = ["/pos", "/sales", "/customers", "/api/scan", "/api/products"];
-// Owner-only pages inside an allowed section.
-const CASHIER_BLOCKED = ["/customers/new"];
+// Signed-out visitors go to /login. Staff (cashier logins) may open every
+// page except the Audit Log and staff accounts, which are the owner's (pages
+// also check this via rbac.ts).
+const OWNER_ONLY = ["/audit-log", "/staff"];
 
 export async function proxy(request: NextRequest) {
   // Browsers ask permission (an OPTIONS "preflight") before sending the app's
@@ -22,13 +19,9 @@ export async function proxy(request: NextRequest) {
 
   if (session.role === "cashier") {
     const { pathname } = request.nextUrl;
-    // Demo: staff may open everything except the audit log and staff accounts.
-    const ownerOnly = ["/audit-log", "/staff"].some((p) => pathname === p || pathname.startsWith(`${p}/`));
-    const allowed = STAFF_SEES_OWNER_TABS
-      ? !ownerOnly
-      : CASHIER_ALLOWED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) &&
-        !CASHIER_BLOCKED.includes(pathname);
-    if (!allowed) return NextResponse.redirect(new URL("/pos", request.url));
+    if (OWNER_ONLY.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+      return NextResponse.redirect(new URL("/pos", request.url));
+    }
   }
 
   return NextResponse.next();

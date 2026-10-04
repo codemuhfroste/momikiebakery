@@ -23,9 +23,16 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appName"] = "Momikie's POS"
     }
 
     buildTypes {
+        // Debug builds install beside the real app (separate data), so testing
+        // against a local server can never touch sales waiting on the device.
+        debug {
+            applicationIdSuffix = ".dev"
+            manifestPlaceholders["appName"] = "Momikie's POS (dev)"
+        }
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.

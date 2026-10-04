@@ -5,75 +5,52 @@ import '../core/format.dart';
 import '../core/models.dart';
 import '../core/theme.dart';
 
-/// The strip under the app bar that always says whether the phone is online
-/// and how much is waiting to be sent — the one thing staff must be able to
-/// trust during a blackout.
-class SyncBanner extends StatelessWidget {
-  const SyncBanner({super.key});
+/// What to say about the connection and the outbox — the one thing staff
+/// must be able to trust during a blackout. Shown in the sidebar (wide) or
+/// the top bar (narrow).
+class SyncStatus {
+  const SyncStatus(this.text, this.color, this.icon, {this.short});
+  final String text;
+  final String? short;
+  final Color color;
+  final IconData icon;
 
-  @override
-  Widget build(BuildContext context) {
-    final app = AppScope.of(context);
-    final Color bg;
-    final Color fg;
-    final IconData icon;
-    final String text;
+  factory SyncStatus.of(AppState app) {
     if (app.needsLogin) {
-      (bg, fg, icon, text) = (const Color(0xFFFEF3C7), Brand.warn, Icons.lock_outline, 'Sign in again to send ${app.waitingCount} waiting item(s)');
-    } else if (!app.online) {
-      (bg, fg, icon, text) = (
-        const Color(0xFFFEF3C7),
-        Brand.warn,
+      return SyncStatus('Sign in again to send ${app.waitingCount} waiting', Brand.amber400, Icons.lock_outline, short: 'Sign in again');
+    }
+    if (!app.online) {
+      return SyncStatus(
+        app.waitingCount == 0 ? 'Offline — sales are saved on this tablet' : 'Offline — ${app.waitingCount} saved, sends when back online',
+        Brand.amber400,
         Icons.cloud_off,
-        app.waitingCount == 0 ? 'Offline — sales are saved on this phone' : 'Offline — ${app.waitingCount} saved on this phone, will send when back online',
-      );
-    } else if (app.syncing) {
-      (bg, fg, icon, text) = (const Color(0xFFE8EDFA), Brand.navy, Icons.sync, 'Syncing…');
-    } else if (app.waitingCount > 0) {
-      (bg, fg, icon, text) = (const Color(0xFFE8EDFA), Brand.navy, Icons.schedule, '${app.waitingCount} waiting to send');
-    } else {
-      (bg, fg, icon, text) = (
-        const Color(0xFFECFDF5),
-        Brand.good,
-        Icons.cloud_done_outlined,
-        app.lastSyncAt == null ? 'Online' : 'Online · synced ${timeOfDay(app.lastSyncAt!)}',
+        short: app.waitingCount == 0 ? 'Offline' : 'Offline · ${app.waitingCount} waiting',
       );
     }
-    return Material(
-      color: bg,
-      child: InkWell(
-        onTap: app.syncing ? null : app.syncNow,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: fg),
-              const SizedBox(width: 8),
-              Expanded(child: Text(text, style: TextStyle(color: fg, fontWeight: FontWeight.w600, fontSize: 13))),
-              if (app.attentionCount > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: Brand.bad, borderRadius: BorderRadius.circular(10)),
-                  child: Text('${app.attentionCount} need attention',
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-                ),
-            ],
-          ),
-        ),
-      ),
+    if (app.syncing) return const SyncStatus('Syncing…', Color(0xFF93C5FD), Icons.sync);
+    if (app.waitingCount > 0) {
+      return SyncStatus('${app.waitingCount} waiting to send', const Color(0xFF93C5FD), Icons.schedule);
+    }
+    return SyncStatus(
+      app.lastSyncAt == null ? 'Online' : 'Online · synced ${timeOfDay(app.lastSyncAt!)}',
+      const Color(0xFF6EE7B7),
+      Icons.cloud_done_outlined,
+      short: 'Online',
     );
   }
 }
 
-/// A product's photo, or tinted initials when it has none (or when offline
-/// and the photo isn't cached) — same idea as the website's placeholders.
+/// A product's photo, or — like the website's placeholders — a tinted tile
+/// with its initials (colour picked from the name, so it never changes).
 class ProductThumb extends StatelessWidget {
-  const ProductThumb({super.key, required this.product, this.size = 44, this.radius = 8});
+  const ProductThumb({super.key, required this.product, this.size = 40, this.radius = 6, this.fontSize});
 
   final Product product;
   final double size;
   final double radius;
+  final double? fontSize;
 
+  // Tailwind's bg-*-100 / text-*-800 pairs, in the website's order.
   static const _tints = [
     (Color(0xFFFEF3C7), Color(0xFF92400E)),
     (Color(0xFFE0F2FE), Color(0xFF075985)),
@@ -92,47 +69,40 @@ class ProductThumb extends StatelessWidget {
     final fallback = _initials();
     final child = url == null
         ? fallback
-        : Image.network(
-            url,
-            headers: app.api.imageHeaders,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => fallback,
-          );
-    return ClipRRect(borderRadius: BorderRadius.circular(radius), child: SizedBox(width: size, height: size, child: child));
+        : Image.network(url, headers: app.api.imageHeaders, fit: BoxFit.cover, errorBuilder: (_, _, _) => fallback);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: ColoredBox(
+        color: Colors.white,
+        child: SizedBox(width: size, height: size, child: child),
+      ),
+    );
   }
 
   Widget _initials() {
+    // Same hash as the website (JavaScript's 32-bit `hash * 31 + code | 0`).
     var hash = 0;
     for (final c in product.name.codeUnits) {
-      hash = (hash * 31 + c) & 0x7fffffff;
+      hash = (hash * 31 + c).toSigned(32);
     }
-    final (bg, fg) = _tints[hash % _tints.length];
+    final (bg, fg) = _tints[hash.abs() % _tints.length];
     final words = product.name.replaceAll(RegExp(r'[^A-Za-z0-9 ]'), ' ').split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-    final letters = words.length > 1 ? words[0][0] + words[1][0] : (words.isEmpty ? '?' : words[0].substring(0, words[0].length.clamp(0, 2)));
+    final letters = words.length > 1
+        ? words[0][0] + words[1][0]
+        : (words.isEmpty ? '?' : words[0].substring(0, words[0].length.clamp(0, 2)));
     return Container(
       color: bg,
       alignment: Alignment.center,
-      child: Text(letters.toUpperCase(),
-          style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: size * 0.3)),
+      child: Text(
+        letters.toUpperCase(),
+        style: TextStyle(color: fg, fontWeight: FontWeight.w600, fontSize: fontSize ?? size * 0.3),
+      ),
     );
   }
-}
-
-class Pill extends StatelessWidget {
-  const Pill(this.text, {super.key, this.color = Brand.muted});
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-        child: Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
-      );
 }
 
 void showMessage(BuildContext context, String text, {bool error = false}) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(text), backgroundColor: error ? Brand.bad : null, behavior: SnackBarBehavior.floating));
+    ..showSnackBar(SnackBar(content: Text(text), backgroundColor: error ? Brand.red700 : null));
 }

@@ -7,6 +7,10 @@ export interface SessionPayload {
 }
 
 const SESSION_COOKIE = "momikie_session";
+// Set by the mobile app's page viewer (with the session cookie): the site
+// then shows just the page, inside the app's own sidebar. Layout only — it
+// grants nothing.
+const APP_EMBED_COOKIE = "momikie_app";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours — one shift (website)
 // The mobile app must keep working through long blackouts without anyone
 // re-entering a PIN, so its sign-in lasts a week. Deactivating a staff member
@@ -127,4 +131,4 @@ export async function verifySessionToken(
   }
 }
 
-export { SESSION_COOKIE, SESSION_TTL_MS, MOBILE_SESSION_TTL_MS };
+export { SESSION_COOKIE, APP_EMBED_COOKIE, SESSION_TTL_MS, MOBILE_SESSION_TTL_MS };

@@ -6,14 +6,32 @@ database credentials.
 
 ## What it does
 
-- **Register** — search or scan (a Bluetooth/USB scanner types into the search
-  box), category filters, product photos, cart, and checkout by Cash, GCash,
-  Maya, Card or Credit (with optional down payment).
-- **Sales** — today's sales recorded on the server, plus anything still on the phone.
-- **Credit** — customers and balances; record payments (applied to the oldest
+It looks and lays out like the website: the same Geist type, colours, navy
+sidebar, cards, tables and badges (`lib/widgets/web.dart` and `shell.dart`
+mirror `src/components/ui.tsx` and `AppShell.tsx`). From 1024 px wide — e.g.
+the Infinix XPAD in landscape — it uses the sidebar layout; narrower screens
+get the top bar and ☰ menu, as on the website.
+
+- **Register** — products beside the current sale (pinned while the products
+  scroll); search or scan (a USB/Bluetooth scanner works without tapping the
+  search box); change a line's price (flagged "Not SRP", recorded as a price
+  override); checkout by Cash, GCash, Maya, Card or Credit (with optional down
+  payment).
+- **Transactions** — any day's recorded sales with the website's figures,
+  filters and badges, plus anything still saved on the tablet.
+- **Credit Accounts** — the website's customers table (balance, aging, last
+  activity, status); tap a customer to record a payment (applied to the oldest
   unpaid receipts first).
 - **Sync** — online/offline status, what's waiting, anything the server
   couldn't accept, recently synced receipts, sign out.
+- **Dashboard, Products, Inventory, End of Day, Sales Report, Scanner Check**
+  (and for the owner, **Audit Log** and **Staff**) — the website's own pages,
+  shown inside the app with the app's sign-in (`lib/screens/web_page.dart`; the
+  site drops its sidebar when the `momikie_app` cookie is set). They need
+  internet. Excel downloads open Android's share sheet (save to Drive/Files or
+  send); Excel import and product photos use the file picker. Links to the
+  Register, Transactions or Credit Accounts switch to the app's own pages.
+  Printing works from the website in a browser, not inside the app.
 
 ## Offline mode
 
@@ -40,11 +58,20 @@ database credentials.
 flutter pub get
 flutter run                                              # against https://momikiebakery.vercel.app
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000   # Android emulator → local `npm run dev`
-flutter test                                             # offline/sync tests
+flutter test                                             # offline/sync and layout tests
 flutter build apk --release                              # build/app/outputs/flutter-apk/app-release.apk
 ```
 
 The server address can also be changed on the sign-in screen ("Server address").
+
+Debug builds install as a separate app, "Momikie's POS (dev)"
+(`com.momikie.momikie_pos.dev`), so testing against a local server never
+touches sales waiting in the real app. With a USB-connected device:
+`adb reverse tcp:3000 tcp:3000` then
+`flutter run --dart-define=API_BASE_URL=http://localhost:3000`.
+
+The app keeps the website's type weights even when Android's "Bold text"
+accessibility setting is on (see `main.dart`).
 
 The release APK is signed with the debug key (fine for installing directly on
 the store's devices). Publishing to the Play Store needs a proper upload key.

@@ -64,7 +64,7 @@ for (const [label, env] of [["Owner PIN", "AUTH_OWNER_PIN"], ["Cashier PIN", "AU
 
 console.log(`
 Still to do in the Vercel dashboard (Project → Settings → Environment Variables):
-  1. Add DEMO_MODE = off   — removes the demo banner and the cashier's access to owner tabs.
+  1. Make sure DEMO_MODE is not set to "on" (that shows the demo banner).
   2. Update AUTH_OWNER_PIN / AUTH_CASHIER_PIN if the check above flagged them.
   3. Redeploy (Deployments → ⋯ → Redeploy) so the new settings apply.
 

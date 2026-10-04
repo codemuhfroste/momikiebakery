@@ -136,9 +136,11 @@ low on stock. Each day's records are dated to that day's store hours.
 
 ### Demo mode and going live
 
-Demo mode is controlled by one setting, `DEMO_MODE`. Unset (the default) it shows
-the "FOR DEMO PURPOSES ONLY" banner and lets the cashier login use every owner tab
-except the Audit Log. `DEMO_MODE=off` turns both off — no code change needed.
+`DEMO_MODE=on` shows the "FOR DEMO PURPOSES ONLY" banner on the website and the app,
+for showing the system with sample data. Unset (the default), there is no banner.
+
+Staff logins use every page except the Audit Log and Staff accounts, which are
+the owner's (as are voiding sales and the full backup).
 
 Going live:
 
@@ -148,8 +150,8 @@ npm run go-live -- --yes-delete-demo-data  # also empties every table
 ```
 
 It checks the database and flags guessable PINs (dates, 123456…), then lists the
-dashboard steps: set `DEMO_MODE=off` and any new PINs in Vercel, redeploy, and
-rotate the Turso token.
+dashboard steps: make sure `DEMO_MODE` isn't `on`, set any new PINs in Vercel,
+redeploy, and rotate the Turso token.
 
 ## Layout
 

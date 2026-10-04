@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import '../core/app_state.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
+import '../widgets/shell.dart';
+import 'web_page.dart';
+import '../widgets/web.dart';
 
 /// Connection, what's waiting, what the server couldn't accept, and the
-/// account — everything about getting this phone's work into the system.
+/// account — everything about getting this tablet's work into the system.
+/// Built from the same parts as the website's pages.
 class SyncScreen extends StatelessWidget {
   const SyncScreen({super.key});
 
@@ -15,155 +19,193 @@ class SyncScreen extends StatelessWidget {
     final rejectedSales = app.pendingSales.where((s) => s.status == 'rejected').toList();
     final rejectedPayments = app.pendingPayments.where((p) => p.status == 'rejected').toList();
 
-    return ListView(
-      padding: const EdgeInsets.all(12),
+    return PageBody(
+      onRefresh: app.syncNow,
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Row(children: [
-                Icon(app.online ? Icons.cloud_done_outlined : Icons.cloud_off, color: app.online ? Brand.good : Brand.warn),
-                const SizedBox(width: 8),
-                Text(app.online ? 'Online' : 'Offline', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              ]),
-              const SizedBox(height: 8),
-              _Row('Waiting to send', '${app.waitingCount}'),
-              _Row('Need attention', '${app.attentionCount}'),
-              _Row('Last synced', app.lastSyncAt == null ? 'Never' : dateTime(app.lastSyncAt!)),
-              _Row('Products on this phone', '${app.products.length}'),
-              if (app.lastError != null)
-                Padding(padding: const EdgeInsets.only(top: 8), child: Text(app.lastError!, style: const TextStyle(color: Brand.bad))),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: app.syncing ? null : app.syncNow,
-                icon: app.syncing
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.sync),
-                label: Text(app.syncing ? 'Syncing…' : 'Sync now'),
-              ),
-            ]),
-          ),
+        PageHeader(
+          title: 'Sync',
+          subtitle:
+              'Sales and credit payments are saved on this tablet first, then sent to the website whenever there is internet — so the register keeps working during a brownout.',
+          actions: [WebButton(app.syncing ? 'Syncing…' : 'Sync now', busy: app.syncing, onPressed: app.syncing ? null : app.syncNow)],
+        ),
+        if (app.lastError != null) ...[NoticeBox(tone: Tone.warn, child: Text(app.lastError!)), const SizedBox(height: 24)],
+        StatGrid(
+          children: [
+            StatCard(
+              label: 'Connection',
+              value: app.online ? 'Online' : 'Offline',
+              hint: app.online
+                  ? 'Connected to ${Uri.tryParse(app.api.baseUrl)?.host ?? app.api.baseUrl}'
+                  : 'Sales are saved on this tablet',
+              tone: app.online ? StatTone.normal : StatTone.warn,
+            ),
+            StatCard(label: 'Waiting to send', value: '${app.waitingCount}', hint: 'Sent automatically when online'),
+            StatCard(
+              label: 'Need attention',
+              value: '${app.attentionCount}',
+              hint: 'The server could not record these as they were',
+              tone: app.attentionCount > 0 ? StatTone.bad : StatTone.normal,
+            ),
+            StatCard(
+              label: 'Last synced',
+              value: app.lastSyncAt == null ? 'Never' : timeOfDay(app.lastSyncAt!),
+              hint: '${app.products.length} products on this tablet',
+            ),
+          ],
         ),
         if (rejectedSales.isNotEmpty || rejectedPayments.isNotEmpty) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 18, 4, 6),
-            child: Text('NEEDS ATTENTION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Brand.bad, letterSpacing: 1)),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
-            child: Text(
-              'The server couldn\'t record these as they were. They stay on this phone until you try again or remove them '
-              '(for example after entering them on the website).',
-              style: TextStyle(color: Brand.muted, fontSize: 12),
+          WebCard(
+            borderColor: Brand.red200,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const CardHeader(
+                  title: 'Needs attention',
+                  description:
+                      'These stay on this tablet until you try again or remove them (for example after entering them on the website).',
+                ),
+                WebTable(
+                  columns: const [Col('Recorded'), Col('What'), Col('Problem', flex: 2), Col('', right: true)],
+                  rows: [
+                    for (final s in rejectedSales)
+                      [
+                        Text(dateTime(s.recordedAt)),
+                        Text('Sale · ${peso(s.total)} · ${s.paymentMethod}\n${s.items.map((i) => '${qty(i.qty)}× ${i.name}').join(', ')}'),
+                        Text(s.error ?? '', style: const TextStyle(color: Brand.red700)),
+                        _Actions(onRetry: () => app.retry(s.clientUuid), onRemove: () => app.discard(s.clientUuid)),
+                      ],
+                    for (final p in rejectedPayments)
+                      [
+                        Text(dateTime(p.recordedAt)),
+                        Text('Payment · ${peso(p.amount)} from ${p.customerName} · ${p.method}'),
+                        Text(p.error ?? '', style: const TextStyle(color: Brand.red700)),
+                        _Actions(onRetry: () => app.retry(p.clientUuid), onRemove: () => app.discard(p.clientUuid)),
+                      ],
+                  ],
+                ),
+              ],
             ),
           ),
-          for (final s in rejectedSales)
-            _Attention(
-              title: 'Sale · ${peso(s.total)} · ${s.paymentMethod}',
-              detail: '${dateTime(s.recordedAt)} · ${s.items.map((i) => '${qty(i.qty)}× ${i.name}').join(', ')}',
-              error: s.error ?? '',
-              onRetry: () => app.retry(s.clientUuid),
-              onRemove: () => app.discard(s.clientUuid),
-            ),
-          for (final p in rejectedPayments)
-            _Attention(
-              title: 'Payment · ${peso(p.amount)} from ${p.customerName}',
-              detail: '${dateTime(p.recordedAt)} · ${p.method}',
-              error: p.error ?? '',
-              onRetry: () => app.retry(p.clientUuid),
-              onRemove: () => app.discard(p.clientUuid),
-            ),
+          const SizedBox(height: 24),
         ],
-        if (app.recentReceipts.isNotEmpty) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 18, 4, 6),
-            child: Text('RECENTLY SYNCED FROM THIS PHONE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Brand.muted, letterSpacing: 1)),
-          ),
-          for (final r in app.recentReceipts.take(15))
-            Card(
-              margin: const EdgeInsets.only(bottom: 6),
-              child: ListTile(
-                dense: true,
-                title: Text(r.receiptNo, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('${dateTime(r.recordedAt)}${r.note == null ? '' : '\n⚠ ${r.note}'}'),
-                trailing: Text(peso(r.total)),
+        WebCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const CardHeader(
+                title: 'Recently synced from this tablet',
+                description: 'Receipt numbers the server gave to sales rung up here.',
               ),
-            ),
-        ],
-        const SizedBox(height: 18),
-        Card(
-          child: Column(children: [
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: Text(app.meName ?? '—'),
-              subtitle: Text(app.meRole == 'owner' ? 'Owner' : 'Cashier'),
-            ),
-            ListTile(leading: const Icon(Icons.dns_outlined), title: const Text('Server'), subtitle: Text(app.api.baseUrl)),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Brand.bad),
-              title: const Text('Sign out', style: TextStyle(color: Brand.bad)),
-              subtitle: app.waitingCount > 0 ? Text('${app.waitingCount} item(s) stay on this phone and send after the next sign-in.') : null,
-              onTap: () => app.logout(),
-            ),
-          ]),
+              if (app.recentReceipts.isEmpty)
+                const EmptyState('Nothing synced from this tablet yet.')
+              else
+                WebTable(
+                  columns: const [Col('Receipt no.'), Col('Rung up'), Col('Total', right: true), Col('Notes', flex: 2)],
+                  rows: [
+                    for (final r in app.recentReceipts.take(15))
+                      [
+                        Text(
+                          r.receiptNo,
+                          style: const TextStyle(fontWeight: FontWeight.w500, color: Brand.navy),
+                        ),
+                        Text(dateTime(r.recordedAt)),
+                        Text(peso(r.total), style: const TextStyle(fontFeatures: tabular)),
+                        r.note == null
+                            ? const Text('—', style: TextStyle(color: Brand.muted))
+                            : Text('⚠ ${r.note}', style: const TextStyle(color: Brand.amber800)),
+                      ],
+                  ],
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        WebCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const CardHeader(title: 'This tablet'),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _kv('Signed in as', app.meName ?? '—'),
+                    _kv('Role', app.meRole == 'owner' ? 'Owner' : 'Cashier'),
+                    _kv('Server', app.api.baseUrl),
+                    _kv('Products on this tablet', '${app.products.length}'),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: WebButton(
+                        'Sign out',
+                        kind: BtnKind.danger,
+                        onPressed: () async {
+                          await clearWebSession();
+                          await app.logout();
+                        },
+                      ),
+                    ),
+                    if (app.waitingCount > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text('${app.waitingCount} item(s) stay on this tablet and send after the next sign-in.', style: tXs),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
+
+  Widget _kv(String k, String v) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        SizedBox(width: 200, child: Text(k, style: tMuted)),
+        Expanded(
+          child: Text(v, style: tSm.copyWith(fontWeight: FontWeight.w500)),
+        ),
+      ],
+    ),
+  );
 }
 
-class _Row extends StatelessWidget {
-  const _Row(this.label, this.value);
-  final String label;
-  final String value;
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(children: [Text(label, style: const TextStyle(color: Brand.muted)), const Spacer(), Text(value, style: const TextStyle(fontWeight: FontWeight.w600))]),
-      );
-}
-
-class _Attention extends StatelessWidget {
-  const _Attention({required this.title, required this.detail, required this.error, required this.onRetry, required this.onRemove});
-  final String title;
-  final String detail;
-  final String error;
+class _Actions extends StatelessWidget {
+  const _Actions({required this.onRetry, required this.onRemove});
   final VoidCallback onRetry;
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) => Card(
-        margin: const EdgeInsets.only(bottom: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFFECACA))),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-            Text(detail, style: const TextStyle(color: Brand.muted, fontSize: 12)),
-            const SizedBox(height: 6),
-            Text(error, style: const TextStyle(color: Brand.bad)),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              TextButton(
-                onPressed: () async {
-                  final sure = await showDialog<bool>(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text('Remove from this phone?'),
-                      content: const Text('Only do this if it has been dealt with another way. It will not be recorded.'),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove', style: TextStyle(color: Brand.bad))),
-                      ],
-                    ),
-                  );
-                  if (sure == true) onRemove();
-                },
-                child: const Text('Remove', style: TextStyle(color: Brand.bad)),
-              ),
-              FilledButton(onPressed: onRetry, child: const Text('Try again')),
-            ]),
-          ]),
-        ),
-      );
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      WebButton(
+        'Remove',
+        kind: BtnKind.danger,
+        onPressed: () async {
+          final sure = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Remove from this tablet?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              content: const Text('Only do this if it has been dealt with another way. It will not be recorded.', style: tMuted),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Remove', style: TextStyle(color: Brand.red700)),
+                ),
+              ],
+            ),
+          );
+          if (sure == true) onRemove();
+        },
+      ),
+      const SizedBox(width: 8),
+      WebButton('Try again', onPressed: onRetry),
+    ],
+  );
 }

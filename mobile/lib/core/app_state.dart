@@ -53,6 +53,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? lastSyncAt;
   DateTime? catalogAt;
 
+  /// The server is in demo mode (shows the "for demo purposes only" banner).
+  bool demo = false;
+
+  /// Credit payments recorded on the server today (Credit Accounts figure).
+  double paymentsToday = 0;
+
   bool online = true;
   bool syncing = false;
   bool needsLogin = false;
@@ -81,7 +87,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     pendingPayments = _readList('outboxPayments', PendingPayment.fromJson);
     recentReceipts = _readList('recentReceipts', SyncedReceipt.fromJson);
     serverSales = _readList('serverSales', ServerSale.fromJson);
+    serverSalesDate = _prefs.getString('serverSalesDate');
     lastSyncAt = DateTime.tryParse(_prefs.getString('lastSyncAt') ?? '');
+    demo = _prefs.getBool('demo') ?? false;
+    paymentsToday = _prefs.getDouble('paymentsToday') ?? 0;
     catalogAt = DateTime.tryParse(_prefs.getString('catalogAt') ?? '');
     ready = true;
     notifyListeners();
@@ -168,6 +177,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     int? customerId,
   }) async {
     if (cart.isEmpty) return 'The cart is empty.';
+    if (cart.any((l) => l.qty <= 0 || l.unitPrice < 0)) return 'A cart line has an invalid quantity or price.';
     final subtotal = round2(cart.fold<double>(0, (s, l) => s + l.total));
     final disc = round2(discount.clamp(0, subtotal).toDouble());
     final total = round2(subtotal - disc);
@@ -194,7 +204,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
             productId: l.product.id,
             name: l.product.name,
             qty: l.qty,
-            unitPrice: l.product.srp,
+            unitPrice: round2(l.unitPrice),
             srp: l.product.srp,
             barcode: l.product.barcode,
           ),
@@ -260,13 +270,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
     if (s.customerId != null) {
       final idx = customers.indexWhere((c) => c.id == s.customerId);
-      if (idx >= 0) customers[idx] = customers[idx].withBalance(round2(customers[idx].balance + s.creditAmount));
+      if (idx >= 0) customers[idx] = customers[idx].withBalance(round2(customers[idx].balance + s.creditAmount), activity: s.recordedAt);
     }
   }
 
   void _applyPayment(PendingPayment p) {
     final idx = customers.indexWhere((c) => c.id == p.customerId);
-    if (idx >= 0) customers[idx] = customers[idx].withBalance(round2(customers[idx].balance - p.amount));
+    if (idx >= 0) customers[idx] = customers[idx].withBalance(round2(customers[idx].balance - p.amount), activity: p.recordedAt);
   }
 
   // ---------------------------------------------------------------- sync
@@ -356,6 +366,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     final data = await api.bootstrap();
     products = (data['products'] as List).map((j) => Product.fromJson(j as Json)).toList();
     customers = (data['customers'] as List).map((j) => Customer.fromJson(j as Json)).toList();
+    demo = data['demo'] == true;
+    paymentsToday = (data['paymentsToday'] as num?)?.toDouble() ?? 0;
+    await _prefs.setBool('demo', demo);
+    await _prefs.setDouble('paymentsToday', paymentsToday);
     final me = data['me'] as Json?;
     if (me != null) {
       meName = '${me['name']}';
@@ -373,14 +387,33 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await _saveCatalog();
   }
 
+  /// The day Transactions shows (null = today, Manila time) and the day the
+  /// loaded [serverSales] are for.
+  String? pickedSalesDate;
+  String? serverSalesDate;
+  bool loadingSales = false;
+
+  String get salesDate => pickedSalesDate ?? todayManila();
+
+  /// Loads one day's recorded sales. [date] picks a new day; without it the
+  /// current day is reloaded (after a sync, or pulling to refresh).
   Future<void> refreshServerSales([String? date]) async {
+    if (date != null) pickedSalesDate = date == todayManila() ? null : date;
+    final day = salesDate;
+    loadingSales = true;
+    notifyListeners();
     try {
-      final data = await api.sales(date ?? _todayManila());
+      final data = await api.sales(day);
+      if (day != salesDate) return; // another day was picked meanwhile
       serverSales = (data['sales'] as List).map((j) => ServerSale.fromJson(j as Json)).toList();
+      serverSalesDate = day;
       await _prefs.setString('serverSales', jsonEncode(serverSales.map((s) => s.toJson()).toList()));
-      notifyListeners();
+      await _prefs.setString('serverSalesDate', day);
     } on ApiException catch (e) {
       if (e.network) _setOnline(false);
+    } finally {
+      loadingSales = false;
+      notifyListeners();
     }
   }
 
@@ -439,7 +472,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await _prefs.setString('customers', jsonEncode(customers.map((c) => c.toJson()).toList()));
   }
 
-  String _todayManila() {
+  String todayManila() {
     final t = DateTime.now().toUtc().add(const Duration(hours: 8));
     return '${t.year.toString().padLeft(4, '0')}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
   }

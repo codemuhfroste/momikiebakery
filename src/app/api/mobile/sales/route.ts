@@ -20,6 +20,8 @@ export async function GET(request: Request) {
         paymentMethod: s.payment_method,
         customerName: s.customer_name,
         creditAmount: s.credit_amount,
+        creditPaid: s.credit_paid,
+        overrideCount: s.override_count,
         itemCount: s.item_count,
         cashierName: s.cashier_name,
         voided: s.voided_at != null,

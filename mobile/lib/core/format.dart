@@ -16,3 +16,6 @@ DateTime manila(DateTime t) => t.toUtc().add(const Duration(hours: 8));
 String timeOfDay(DateTime t) => _time.format(manila(t));
 String dateTime(DateTime t) => _dateTime.format(manila(t));
 String manilaDate(DateTime t) => DateFormat('yyyy-MM-dd').format(manila(t));
+
+/// "Oct 3, 2026, 11:04 PM" — the website's formatDateTime.
+String longDateTime(DateTime t) => DateFormat('MMM d, y, h:mm a').format(manila(t));

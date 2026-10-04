@@ -3,7 +3,6 @@ import type { Role } from "@/lib/auth";
 import NavLinks, { type NavGroup } from "./NavLinks";
 import MobileNav from "./MobileNav";
 import SubmitButton from "./SubmitButton";
-import { STAFF_SEES_OWNER_TABS } from "@/lib/demo";
 
 const OWNER_NAV: NavGroup[] = [
   { label: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }] },
@@ -39,17 +38,6 @@ const OWNER_NAV: NavGroup[] = [
   },
 ];
 
-const CASHIER_NAV: NavGroup[] = [
-  {
-    label: "Sales",
-    items: [
-      { href: "/pos", label: "Register", icon: "register" },
-      { href: "/sales", label: "Transactions", icon: "sales" },
-      { href: "/customers", label: "Credit Accounts", icon: "credit" },
-    ],
-  },
-];
-
 function todayLabel() {
   return new Date().toLocaleDateString("en-PH", {
     timeZone: "Asia/Manila",
@@ -60,8 +48,8 @@ function todayLabel() {
   });
 }
 
-// Demo (STAFF_SEES_OWNER_TABS): staff get every owner tab except the Audit Log.
-const STAFF_DEMO_NAV: NavGroup[] = OWNER_NAV.map((g) => ({
+// Staff get every owner tab except the Audit Log and staff accounts.
+const STAFF_NAV: NavGroup[] = OWNER_NAV.map((g) => ({
   ...g,
   items: g.items.filter((i) => i.href !== "/audit-log" && i.href !== "/staff"),
 })).filter((g) => g.items.length > 0);
@@ -70,15 +58,19 @@ const STAFF_DEMO_NAV: NavGroup[] = OWNER_NAV.map((g) => ({
 export default function AppShell({
   role,
   name,
+  embedded = false,
   children,
 }: {
   role?: Role;
   name?: string;
+  embedded?: boolean;
   children: React.ReactNode;
 }) {
   if (!role) return <>{children}</>;
+  // Same padding as the app's own pages at the same width.
+  if (embedded) return <main className="min-w-0 px-4 py-5 sm:px-6 md:px-8 md:py-7 print:p-0">{children}</main>;
 
-  const groups = role === "owner" ? OWNER_NAV : STAFF_SEES_OWNER_TABS ? STAFF_DEMO_NAV : CASHIER_NAV;
+  const groups = role === "owner" ? OWNER_NAV : STAFF_NAV;
   // Links and sign-out, shared by the desktop sidebar and the phone drawer.
   const menu = (
     <>
