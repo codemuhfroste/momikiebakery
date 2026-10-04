@@ -178,7 +178,6 @@ class _SalesScreenState extends State<SalesScreen> {
                     Col('Payment'),
                     Col('Total', right: true),
                     Col('Notes', flex: 2),
-                    Col(''),
                   ],
                   // A receipt opens the website's receipt page (items, void, print).
                   onRowTap: (i) => appNav.go('sales', path: '/sales/${rows[i].id}'),
@@ -223,20 +222,6 @@ class _SalesScreenState extends State<SalesScreen> {
         ),
       ),
       _notes(s, credit),
-      // Like the website: voidable unless already voided or (partly) paid.
-      s.voided || s.creditPaid > 0.004
-          ? const SizedBox.shrink()
-          : InkWell(
-              onTap: () => _void(s),
-              borderRadius: BorderRadius.circular(4),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Text(
-                  'Void',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Brand.red600),
-                ),
-              ),
-            ),
     ];
   }
 
@@ -273,6 +258,28 @@ class _SalesScreenState extends State<SalesScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 260),
               child: Text('⚠ Check: ${s.syncNote}', style: const TextStyle(fontSize: 12, color: Brand.amber800)),
+            ),
+          ),
+        // Like the website: voidable unless already voided or (partly) paid.
+        if (!s.voided && s.creditPaid <= 0.004)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: InkWell(
+              onTap: () => _void(s),
+              borderRadius: BorderRadius.circular(4),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  'Void sale',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Brand.red600,
+                    decoration: TextDecoration.underline,
+                    decorationColor: Brand.red600,
+                  ),
+                ),
+              ),
             ),
           ),
       ],
